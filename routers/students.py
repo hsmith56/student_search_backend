@@ -1,0 +1,142 @@
+from typing import Tuple
+from fastapi import APIRouter, HTTPException, Query
+from models.student import BasicStudent, FullStudent
+from models.search_filters import SearchFilters
+import json
+from pathlib import Path
+from utils.search_filters import filter_students
+from functools import lru_cache
+from utils import db
+
+router = APIRouter(prefix="/students", tags=["students"])
+
+
+def _basic_student_dict(student: dict) -> BasicStudent:
+    # helper func to avoid having to retype this entire section each time
+    return BasicStudent(
+        first_name=student["namefirst"],
+        app_id=student["applicationid"],
+        pax_id=student["participantid"],
+        country=student["residenceCountry"],
+        gpa=student["schoolInfoGPA"],
+        english_score=student["englishTestScore"],
+        applying_to_grade=student["gradeApplyingTo"],
+        usahsid=student["usahsId"],
+        urban_request=student["urban"], 
+        selected_interests=student["interests"]["selectables"],
+        program_type=student["program_type"]
+        .replace("High School USA ", "")
+        .replace("Exchange ", ""),
+        adjusted_age=student["adjusted_age"],
+        placement_status=student["placementStatusName"],
+    )
+
+
+def _full_student_dict(student: dict) -> FullStudent:
+    # helper func to avoid having to retype this entire section each time
+    return FullStudent(
+        first_name=student["namefirst"],
+        app_id=student["applicationid"],
+        pax_id=student["participantid"],
+        country=student["residenceCountry"],
+        gpa=student["schoolInfoGPA"],
+        english_score=student["englishTestScore"],
+        applying_to_grade=student["gradeApplyingTo"],
+        usahsid=student["usahsId"],
+        program_type=student["program_type"]
+        .replace("High School USA ", "")
+        .replace("Exchange", "").replace("2026 ", "").strip(),
+        adjusted_age=student["adjusted_age"],
+        gender_desc=student["genderdescription"],
+        id=student["student_id"],
+        current_grade=student["currentGradeLevel"],
+        status=student["statussystemname"],
+        states=student["states"],
+        early_placement=student["early_placement"],
+        urban_request=student["urban"],
+        single_placement=student["single_placement"],
+        double_placement=student["double_placement"],
+        free_text_interests=student["interests"]["free_text"],
+        family_description=student["interests"]["family_description"],
+        favorite_subjects=student["interests"]["favorite_subject"],
+        selected_interests=student["interests"]["selectables"],
+        photo_comments=student["photo_comments"],
+        religion=student["religion"],
+        allergy_comments=student["allergies_comment"],
+        dietary_restrictions=student["diet_comment"],
+        religious_frequency=student["religiousFrequency"],
+        intro_message=student["messages"][0],
+        message_to_host_family=student["messages"][1],
+        message_from_natural_family=student["messages"][2],
+        media_link=student.get("media_link", ""),
+        health_comments=student["health_comments"],
+        live_with_pets=student["can_live_w_pets"],
+        placement_status=student["placementStatusName"].title(),
+    )
+
+
+DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "student_extra_info_real.json"
+with open(DATA_PATH) as f:
+    student_data = json.load(f)
+    STUDENTS: Tuple[FullStudent] = [_full_student_dict(s) for s in student_data if s.get("namefirst").lower() != "test"]
+    PLACED_STUDENTS = [x for x in STUDENTS if x.placement_status.lower() != "allocated" and x.placement_status.lower() != "unassigned"]
+    PLACEABLE_STUDENTS = [
+        x for x in STUDENTS if x.placement_status.lower() == "allocated" or x.placement_status.lower() == "unassigned"
+    ]
+
+_existing_students = db.read_students()
+
+for student in STUDENTS:
+    if student.app_id not in _existing_students:
+        db.add_student(first_name=student.first_name,
+                    app_id=student.app_id, 
+                    pax_id=student.pax_id,
+                    country=student.country,
+                    program_type=student.program_type,
+                    adjusted_age=student.adjusted_age,
+                    placement_status=student.placement_status)
+
+
+
+
+@router.get("/")
+def list_students():
+    return {"First Student": PLACEABLE_STUDENTS[0:10]}
+
+
+@router.get("/basic/{usahsId}", response_model=BasicStudent)
+def get_student(usahsId: str):
+    for student in STUDENTS:
+        if student.usahsid.lower() == usahsId.lower():
+            return BasicStudent(**student.model_dump())
+    raise HTTPException(status_code=404, detail="Student not found")
+
+
+@lru_cache(maxsize=128)
+def apply_filters(filters: SearchFilters):
+    return filter_students(STUDENTS, filters)
+
+
+@router.post("/search")
+def search(
+    filters: SearchFilters,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(21, ge=1, le=100),
+):
+    print(filters)
+
+    results = apply_filters(filters)
+    results = [BasicStudent(**x.model_dump()) for x in results]
+
+    total = len(results)
+    start = (page - 1) * page_size
+    end = start + page_size
+    paginated = results[start:end]
+
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total_results": total,
+        "total_pages": (total + page_size - 1) // page_size,
+        "results": paginated,
+    }

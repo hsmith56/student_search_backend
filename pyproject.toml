@@ -1,0 +1,15 @@
+[project]
+name = "student-search-api"
+version = "0.1.0"
+description = "FastAPI for querying student profile information"
+readme = "README.md"
+requires-python = ">=3.9.2"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "fastapi[standard]>=0.118.0",
+    "rapidfuzz>=3.13.0",
+    "requests>=2.32.5",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
