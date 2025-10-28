@@ -13,11 +13,14 @@ sessions = {}  # still OK to keep in-memory sessions for simplicity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
 def hash_password(password: str):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+
 def verify_password(plain_password, hashed_password):
     return hash_password(plain_password) == hashed_password
+
 
 def create_session(username: str, user_id: str, first_name: str) -> str:
     session_id = str(uuid.uuid4())
@@ -29,31 +32,33 @@ def create_session(username: str, user_id: str, first_name: str) -> str:
     }
     return session_id
 
+
 def get_current_user(session_id: Optional[str] = Cookie(default=None)):
     if not session_id or session_id not in sessions:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
 
     user_id = sessions[session_id]["user_id"]
     user = db.read_user(user_id=user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found in database")
-    return user  
+    return user
+
 
 @router.post("/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     print("HERE")
     user = db.read_user(username=form_data.username)
-    
+
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     if not verify_password(form_data.password, user["hashed_password"]):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-
-
     session_id = create_session(user["username"], user["id"], user["first_name"])
-    
+
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
@@ -64,11 +69,13 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     )
     return {"message": "Logged in successfully"}
 
+
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     """Return full user profile from database"""
     user = {key: current_user[key] for key in current_user.keys()}
     return user
+
 
 @router.post("/logout")
 def logout(response: Response, session_id: Optional[str] = Cookie(default=None)):
@@ -82,10 +89,22 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     first_name: str
+    code: str
+
 
 @router.post("/register")
 def register_user(user: CreateUserRequest):
+    if (
+        verify_password(
+            plain_password=user.code,
+            hashed_password="0d03fb3ebcf6dfc221af83f7bf5d58f0066876ee7ae7caf0d8fbdaa8a1453a74",
+        )
+        is False
+    ):
+        raise HTTPException(status_code=401, detail="Invalid signup code provided")
+
     existing = db.read_user(username=user.username)
+
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 

@@ -35,8 +35,9 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
         if filters.interests.lower() == "all":
             pass
         else:
+            print(res[0].selected_interests)
             res = tuple(
-                s for s in res if filters.interests.lower() in s.selected_interests
+                s for s in res if filters.interests in s.selected_interests
             )
             print(f"\t3. {len(res)}")
 
