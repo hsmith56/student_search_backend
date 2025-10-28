@@ -41,15 +41,19 @@ def get_current_user(session_id: Optional[str] = Cookie(default=None)):
 
 @router.post("/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
+    print("HERE")
     user = db.read_user(username=form_data.username)
+    
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     if not verify_password(form_data.password, user["hashed_password"]):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    session_id = create_session(user["username"], user["id"], user["first_name"])
 
+
+    session_id = create_session(user["username"], user["id"], user["first_name"])
+    
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,

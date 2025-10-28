@@ -7,9 +7,13 @@ from rapidfuzz import fuzz, utils
 def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
     res: Tuple[FullStudent] = tuple(students)
 
-    if filters.statusOptions is not None and "all" not in filters.statusOptions:
+    if filters.statusOptions is not None and "All" not in filters.statusOptions:
         lower_options = [x.lower() for x in filters.statusOptions]
-        res = tuple(s for s in res if any(opt in s.placement_status.lower() for opt in lower_options))
+        res = tuple(
+            s
+            for s in res
+            if any(opt in s.placement_status.lower() for opt in lower_options)
+        )
 
     if filters.gender_female is not None and filters.gender_male is not None:
         if filters.gender_female is True and filters.gender_male is True:
@@ -18,7 +22,7 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
             res = tuple(s for s in res if s.gender_desc.lower() == "female")
         elif filters.gender_male is True:
             res = tuple(s for s in res if s.gender_desc.lower() == "male")
-        
+
         print(f"\t1. {len(res)}")
 
     if filters.state and filters.state != "all":
@@ -31,7 +35,9 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
         if filters.interests.lower() == "all":
             pass
         else:
-            res = tuple(s for s in res if filters.interests.lower() in s.selected_interests)
+            res = tuple(
+                s for s in res if filters.interests.lower() in s.selected_interests
+            )
             print(f"\t3. {len(res)}")
 
     if filters.gpa and filters.gpa != "all":
@@ -51,7 +57,9 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
         print(f"\t6. {len(res)}")
 
     if filters.country_of_origin and filters.country_of_origin != "all":
-        res = tuple(s for s in res if s.country.lower() == filters.country_of_origin.lower())
+        res = tuple(
+            s for s in res if s.country.lower() == filters.country_of_origin.lower()
+        )
         print(f"\t7. {len(res)}")
 
     if filters.adjusted_age and filters.adjusted_age != "all":
@@ -87,9 +95,9 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
                 "5-month-aug": "August 5",
                 "10-month-jan": "January 10",
                 "5-month-jan": "January 5",
-                }
+            }
             p_types = [mapping.get(x) for x in filters.program_types]
-            res = tuple(s for s in res if any([x in s.program_type for x in p_types]) )
+            res = tuple(s for s in res if any([x in s.program_type for x in p_types]))
             print(f"\t11. {len(res)}")
 
     if filters.early_placement is not None and filters.early_placement != "all":
@@ -101,71 +109,157 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
 
     # TODO: Confirm if this worked
     if filters.hasVideo is not None and filters.hasVideo is True:
-        res = tuple(s for s in res if s.media_link != "" )
+        res = tuple(s for s in res if s.media_link != "")
         print(f"\t13. {len(res)}")
 
     if filters.religiousPractice is not None and filters.religiousPractice != "all":
         mapping = {
-                "none": 0,
-                "some": 1,
-                "often": 2,
-            }
-        res = tuple(s for s in res if s.religious_frequency == mapping[filters.religiousPractice])
+            "none": 0,
+            "some": 1,
+            "often": 2,
+        }
+        res = tuple(
+            s
+            for s in res
+            if s.religious_frequency == mapping[filters.religiousPractice]
+        )
         print(f"\t14. {len(res)}")
 
     if filters.grants_options is not None and len(filters.grants_options) != 0:
         if "grant" in filters.grants_options:
-            res = tuple(x for x in res if x.usahsid.upper()[0:3] in ["CBE", "CBX", "FAO", "FLX", "YES", "CBG"])
+            res = tuple(
+                x
+                for x in res
+                if x.usahsid.upper()[0:3] in ["CBE", "CBX", "FAO", "FLX", "YES", "CBG"]
+            )
         else:
-            res = tuple(student
-                        for student in res
-                        if student.usahsid.lower()[0:3] in filters.grants_options
+            res = tuple(
+                student
+                for student in res
+                if student.usahsid.lower()[0:3] in filters.grants_options
             )
         print(f"\t15. {len(res)}")
 
     # TODO: Switch to embeddings
     if filters.photo_search is not None and filters.photo_search != "":
-        res = tuple(s for s in res if fuzz.partial_ratio(filters.photo_search, s.photo_comments, processor=utils.default_process) >= 86)
+        res = tuple(
+            s
+            for s in res
+            if fuzz.partial_ratio(
+                filters.photo_search, s.photo_comments, processor=utils.default_process
+            )
+            >= 86
+        )
         print(f"\t16. {len(res)}")
 
     if filters.free_text is not None and filters.free_text != "":
         x: list[FullStudent] = []
 
         for student in res:
-            if (fuzz.ratio(filters.free_text, student.first_name, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.ratio(
+                    filters.free_text,
+                    student.first_name,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.photo_comments, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.photo_comments,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.ratio(filters.free_text, student.religion, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.ratio(
+                    filters.free_text, student.religion, processor=utils.default_process
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.allergy_comments, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.allergy_comments,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.dietary_restrictions, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.dietary_restrictions,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, " ".join(w for w in student.health_comments), processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    " ".join(w for w in student.health_comments),
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, " ".join(w for w in student.favorite_subjects), processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    " ".join(w for w in student.favorite_subjects),
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, " ".join(w for w in student.selected_interests), processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    " ".join(w for w in student.selected_interests),
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, " ".join(w for w in student.free_text_interests), processor=utils.default_process)) >= 80:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    " ".join(w for w in student.free_text_interests),
+                    processor=utils.default_process,
+                )
+            ) >= 80:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.intro_message, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.intro_message,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.message_to_host_family, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.message_to_host_family,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
-            if (fuzz.partial_ratio(filters.free_text, student.message_from_natural_family, processor=utils.default_process)) >= 86:
+            if (
+                fuzz.partial_ratio(
+                    filters.free_text,
+                    student.message_from_natural_family,
+                    processor=utils.default_process,
+                )
+            ) >= 86:
                 x.append(student)
                 continue
 

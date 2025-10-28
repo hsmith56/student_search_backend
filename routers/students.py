@@ -1,14 +1,31 @@
-from typing import Tuple
-from fastapi import APIRouter, HTTPException, Query
-from models.student import BasicStudent, FullStudent
-from models.search_filters import SearchFilters
 import json
-from pathlib import Path
-from utils.search_filters import filter_students
+from enum import Enum
 from functools import lru_cache
+from pathlib import Path
+from typing import Tuple
+
+from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
+
+from models.search_filters import SearchFilters
+from models.student import BasicStudent, FullStudent
 from utils import db
+from utils.search_filters import filter_students
 
 router = APIRouter(prefix="/students", tags=["students"])
+
+
+class OrderBy(str, Enum):
+    s_name = "name"
+    s_id = "id"
+    country = "country"
+    gpa = "gpa"
+    age = "adjusted_age"
+
+
+class ItemQueryParams(BaseModel):
+    order_by: OrderBy = OrderBy.age
+    descending: bool = True
 
 
 def _basic_student_dict(student: dict) -> BasicStudent:
@@ -22,7 +39,7 @@ def _basic_student_dict(student: dict) -> BasicStudent:
         english_score=student["englishTestScore"],
         applying_to_grade=student["gradeApplyingTo"],
         usahsid=student["usahsId"],
-        urban_request=student["urban"], 
+        urban_request=student["urban"],
         selected_interests=student["interests"]["selectables"],
         program_type=student["program_type"]
         .replace("High School USA ", "")
@@ -45,7 +62,9 @@ def _full_student_dict(student: dict) -> FullStudent:
         usahsid=student["usahsId"],
         program_type=student["program_type"]
         .replace("High School USA ", "")
-        .replace("Exchange", "").replace("2026 ", "").strip(),
+        .replace("Exchange", "")
+        .replace("2026 ", "")
+        .strip(),
         adjusted_age=student["adjusted_age"],
         gender_desc=student["genderdescription"],
         id=student["student_id"],
@@ -75,28 +94,48 @@ def _full_student_dict(student: dict) -> FullStudent:
     )
 
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "student_extra_info_real.json"
+DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "student_extra_info.json"
 with open(DATA_PATH) as f:
     student_data = json.load(f)
-    STUDENTS: Tuple[FullStudent] = [_full_student_dict(s) for s in student_data if s.get("namefirst").lower() != "test"]
-    PLACED_STUDENTS = [x for x in STUDENTS if x.placement_status.lower() != "allocated" and x.placement_status.lower() != "unassigned"]
+    STUDENTS: Tuple[FullStudent] = [
+        _full_student_dict(s)
+        for s in student_data
+        if s.get("namefirst").lower() != "test"
+        and s.get("statussystemname").lower() != "canceled"
+    ]
+    PLACED_STUDENTS = [
+        x
+        for x in STUDENTS
+        if x.placement_status.lower() != "allocated"
+        and x.placement_status.lower() != "unassigned"
+    ]
     PLACEABLE_STUDENTS = [
-        x for x in STUDENTS if x.placement_status.lower() == "allocated" or x.placement_status.lower() == "unassigned"
+        x
+        for x in STUDENTS
+        if x.placement_status.lower() == "allocated"
+        or x.placement_status.lower() == "unassigned"
     ]
 
 _existing_students = db.read_students()
 
 for student in STUDENTS:
     if student.app_id not in _existing_students:
-        db.add_student(first_name=student.first_name,
-                    app_id=student.app_id, 
-                    pax_id=student.pax_id,
-                    country=student.country,
-                    program_type=student.program_type,
-                    adjusted_age=student.adjusted_age,
-                    placement_status=student.placement_status)
-
-
+        db.add_student(
+            first_name=student.first_name,
+            app_id=student.app_id,
+            pax_id=student.pax_id,
+            country=student.country,
+            program_type=student.program_type,
+            adjusted_age=student.adjusted_age,
+            placement_status=student.placement_status,
+        )
+    else:
+        try:
+            db.update_student_status(
+                app_id=student.app_id, placement_status=student.placement_status
+            )
+        except Exception as e:
+            print(e)
 
 
 @router.get("/")
@@ -122,11 +161,18 @@ def search(
     filters: SearchFilters,
     page: int = Query(1, ge=1),
     page_size: int = Query(21, ge=1, le=100),
+    params: ItemQueryParams = Depends(),
 ):
     print(filters)
 
     results = apply_filters(filters)
     results = [BasicStudent(**x.model_dump()) for x in results]
+
+    results = sorted(
+        results,
+        key=lambda x: x.__getattribute__(params.order_by),
+        reverse=params.descending,
+    )
 
     total = len(results)
     start = (page - 1) * page_size

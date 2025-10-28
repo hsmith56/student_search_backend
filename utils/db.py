@@ -4,12 +4,13 @@ import json
 import hashlib
 import itertools
 
+
 # Database setup
 def initialize_db():
     connection = sqlite3.connect("user_auth.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
@@ -17,9 +18,9 @@ def initialize_db():
         first_name TEXT NOT NULL,
         favorites TEXT
     )
-    ''')
+    """)
 
-    cursor.execute('''
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS simple_students( 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,
@@ -30,7 +31,7 @@ def initialize_db():
         adjusted_age INTEGER NOT NULL,
         placement_status TEXT
     )
-    ''')
+    """)
 
     # cursor.execute('''
     # CREATE TABLE IF NOT EXISTS metadata()
@@ -40,6 +41,7 @@ def initialize_db():
 
     connection.commit()
     connection.close()
+
 
 # Create a new user
 def create_user(username, password, first_name, favorites=None):
@@ -52,71 +54,111 @@ def create_user(username, password, first_name, favorites=None):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     try:
-        cursor.execute('''
+        cursor.execute(
+            """
         INSERT INTO users (id, username, hashed_password, first_name, favorites)
         VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, username, hashed_password, first_name, favorites_str))
+        """,
+            (user_id, username, hashed_password, first_name, favorites_str),
+        )
         connection.commit()
     except sqlite3.IntegrityError:
         print("Username already exists.")
     finally:
         connection.close()
 
+
 # Read user data
-def read_user(username="", user_id = ""):
+def read_user(username="", user_id=""):
     connection = sqlite3.connect("user_auth.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
     if username != "":
-        cursor.execute('''
+        cursor.execute(
+            """
         SELECT * FROM users WHERE username = ?
-        ''', (username,))
+        """,
+            (username,),
+        )
         user = cursor.fetchone()
         connection.close()
     else:
-        cursor.execute('''
+        cursor.execute(
+            """
         SELECT * FROM users WHERE id = ?
-        ''', (user_id,))
+        """,
+            (user_id,),
+        )
         user = cursor.fetchone()
         connection.close()
     return user
 
+
 # Update user data
-def update_user(username: str, first_name: str="", favorites=None):
+def update_user(username: str, first_name: str = "", favorites=None):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     if first_name != "":
-        cursor.execute('''
+        cursor.execute(
+            """
         UPDATE users SET first_name = ? WHERE username = ?
-        ''', (first_name, username))
+        """,
+            (first_name, username),
+        )
     if favorites is not None:
         if isinstance(favorites, list):
             favorites_str = json.dumps(favorites)
-            cursor.execute('''
+            cursor.execute(
+                """
             UPDATE users SET favorites = ? WHERE username = ?
-            ''', (favorites_str, username))
+            """,
+                (favorites_str, username),
+            )
     connection.commit()
     connection.close()
+
 
 # Delete a user
 def delete_user(username):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
     DELETE FROM users WHERE username = ?
-    ''', (username,))
+    """,
+        (username,),
+    )
     connection.commit()
     connection.close()
 
 
-def add_student(first_name: str, app_id: int, pax_id: int, country: str, program_type: str, adjusted_age: int, placement_status: str):
+def add_student(
+    first_name: str,
+    app_id: int,
+    pax_id: int,
+    country: str,
+    program_type: str,
+    adjusted_age: int,
+    placement_status: str,
+):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     try:
-        cursor.execute('''
+        cursor.execute(
+            """
         INSERT INTO simple_students (first_name, app_id, pax_id, country, program_type, adjusted_age, placement_status)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (first_name, app_id, pax_id, country, program_type, adjusted_age, placement_status))
+        """,
+            (
+                first_name,
+                app_id,
+                pax_id,
+                country,
+                program_type,
+                adjusted_age,
+                placement_status,
+            ),
+        )
         connection.commit()
     except sqlite3.IntegrityError:
         print("student already exists.")
@@ -127,24 +169,45 @@ def add_student(first_name: str, app_id: int, pax_id: int, country: str, program
 def update_student_status(app_id: int, placement_status: str):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
     UPDATE simple_students SET placement_status = ? WHERE app_id = ?
-    ''', (placement_status, app_id))
+    """,
+        (placement_status, app_id),
+    )
     connection.commit()
     connection.close()
+
 
 def query_students(query_param: str, query_val: str):
     connection = sqlite3.connect("user_auth.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
-    cursor.execute(f'''
+    cursor.execute(
+        f"""
     SELECT id FROM simple_students WHERE {query_param} Like ?
-    ''', (query_val,))
+    """,
+        (query_val,),
+    )
     students = cursor.fetchall()
     connection.close()
     students = list(itertools.chain.from_iterable(students))
     return students
+
+
+def get_countries():
+    connection = sqlite3.connect("user_auth.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT DISTINCT country FROM simple_students")
+
+    countries = cursor.fetchall()
+    connection.close()
+    countries = list(itertools.chain.from_iterable(countries))
+    return countries
+
 
 # Read student data
 def read_students():
@@ -152,68 +215,72 @@ def read_students():
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
     SELECT app_id FROM simple_students
-    ''')
+    """)
     students = cursor.fetchall()
     connection.close()
     students = list(itertools.chain.from_iterable(students))
     return students
 
+
 # Delete a student
 def delete_student(app_id):
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
     DELETE FROM simple_students WHERE app_id = ?
-    ''', (app_id,))
+    """,
+        (app_id,),
+    )
     connection.commit()
     connection.close()
 
-initialize_db()
 
+initialize_db()
 
 
 # add_student("harrison",1432, pax_id=123, country="United States", program_type="10 month jan", adjusted_age=15, placement_status="accepted")
 # delete_student(1432)
 
 # cursor.execute('''
-    # CREATE TABLE IF NOT EXISTS full_students (
-    #     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    #     first_name TEXT NOT NULL,
-    #     app_id INTEGER NOT NULL,
-    #     pax_id INTEGER NOT NULL,
-    #     country TEXT NOT NULL,
-    #     gpa TEXT NOT NULL,
-    #     english_score TEXT NOT NULL,
-    #     applying_to_grade INTEGER NOT NULL,
-    #     usahsid TEXT NOT NULL,
-    #     program_type TEXT NOT NULL,
-    #     adjusted_age INTEGER NOT NULL,
-    #     selected_interests TEXT,  -- Store as JSON string
-    #     urban_request TEXT,
-    #     placement_status TEXT,
-    #     gender_desc TEXT,
-    #     current_grade INTEGER NOT NULL,
-    #     status TEXT,
-    #     states TEXT,  -- Store as JSON string
-    #     early_placement BOOLEAN DEFAULT 0,
-    #     single_placement BOOLEAN NOT NULL,
-    #     double_placement BOOLEAN NOT NULL,
-    #     free_text_interests TEXT,  -- Store as JSON string
-    #     family_description TEXT,
-    #     favorite_subjects TEXT,
-    #     photo_comments TEXT,
-    #     religion TEXT,
-    #     allergy_comments TEXT,
-    #     dietary_restrictions TEXT,
-    #     religious_frequency INTEGER,
-    #     intro_message TEXT,
-    #     message_to_host_family TEXT,
-    #     message_from_natural_family TEXT,
-    #     media_link TEXT,
-    #     health_comments TEXT,  -- Store as JSON string
-    #     live_with_pets BOOLEAN,
-    #     local_coordinator TEXT DEFAULT ""
-    # )
-    # ''')
+# CREATE TABLE IF NOT EXISTS full_students (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     first_name TEXT NOT NULL,
+#     app_id INTEGER NOT NULL,
+#     pax_id INTEGER NOT NULL,
+#     country TEXT NOT NULL,
+#     gpa TEXT NOT NULL,
+#     english_score TEXT NOT NULL,
+#     applying_to_grade INTEGER NOT NULL,
+#     usahsid TEXT NOT NULL,
+#     program_type TEXT NOT NULL,
+#     adjusted_age INTEGER NOT NULL,
+#     selected_interests TEXT,  -- Store as JSON string
+#     urban_request TEXT,
+#     placement_status TEXT,
+#     gender_desc TEXT,
+#     current_grade INTEGER NOT NULL,
+#     status TEXT,
+#     states TEXT,  -- Store as JSON string
+#     early_placement BOOLEAN DEFAULT 0,
+#     single_placement BOOLEAN NOT NULL,
+#     double_placement BOOLEAN NOT NULL,
+#     free_text_interests TEXT,  -- Store as JSON string
+#     family_description TEXT,
+#     favorite_subjects TEXT,
+#     photo_comments TEXT,
+#     religion TEXT,
+#     allergy_comments TEXT,
+#     dietary_restrictions TEXT,
+#     religious_frequency INTEGER,
+#     intro_message TEXT,
+#     message_to_host_family TEXT,
+#     message_from_natural_family TEXT,
+#     media_link TEXT,
+#     health_comments TEXT,  -- Store as JSON string
+#     live_with_pets BOOLEAN,
+#     local_coordinator TEXT DEFAULT ""
+# )
+# ''')
