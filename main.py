@@ -13,6 +13,7 @@ app.add_middleware(
         "http://localhost",
         "https://hsmithtech.com",
         "https://www.hsmithtech.com",
+        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],
