@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Tuple
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from models.search_filters import SearchFilters
