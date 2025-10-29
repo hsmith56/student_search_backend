@@ -36,9 +36,7 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
             pass
         else:
             print(res[0].selected_interests)
-            res = tuple(
-                s for s in res if filters.interests in s.selected_interests
-            )
+            res = tuple(s for s in res if filters.interests in s.selected_interests)
             print(f"\t3. {len(res)}")
 
     if filters.gpa and filters.gpa != "all":
@@ -49,9 +47,13 @@ def filter_students(students: Tuple[FullStudent], filters: SearchFilters):
             pass
         print(f"\t4. {len(res)}")
 
-    if filters.pets_in_home is not None and isinstance(filters.pets_in_home, bool):
-        res = tuple(s for s in res if s.live_with_pets is filters.pets_in_home)
-        print(f"\t5. {len(res)}")
+    if filters.pets_in_home is not None and isinstance(filters.pets_in_home, str):
+        if filters.pets_in_home != "all":
+            mapping = {"yes": True, "no": False}
+            res = tuple(
+                s for s in res if s.live_with_pets is mapping.get(filters.pets_in_home)
+            )
+            print(f"\t5. {len(res)}")
 
     if filters.usahsId:
         res = tuple(s for s in res if filters.usahsId.lower() in s.usahsid.lower())
