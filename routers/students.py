@@ -28,31 +28,10 @@ class ItemQueryParams(BaseModel):
     descending: bool = True
 
 
-def _basic_student_dict(student: dict) -> BasicStudent:
-    # helper func to avoid having to retype this entire section each time
-    return BasicStudent(
-        first_name=student["namefirst"],
-        app_id=student["applicationid"],
-        pax_id=student["participantid"],
-        country=student["residenceCountry"],
-        gpa=student["schoolInfoGPA"],
-        english_score=student["englishTestScore"],
-        applying_to_grade=student["gradeApplyingTo"],
-        usahsid=student["usahsId"],
-        urban_request=student["urban"],
-        selected_interests=student["interests"]["selectables"],
-        program_type=student["program_type"]
-        .replace("High School USA ", "")
-        .replace("Exchange ", ""),
-        adjusted_age=student["adjusted_age"],
-        placement_status=student["placementStatusName"],
-    )
-
-
 def _full_student_dict(student: dict) -> FullStudent:
     # helper func to avoid having to retype this entire section each time
     return FullStudent(
-        first_name=student["namefirst"],
+        first_name=student["namefirst"] + " - " + student["genderdescription"][0],
         app_id=student["applicationid"],
         pax_id=student["participantid"],
         country=student["residenceCountry"],
@@ -137,6 +116,11 @@ for student in STUDENTS:
         except Exception as e:
             print(e)
 
+current_s_ids = {s.app_id for s in STUDENTS}
+for student in _existing_students:
+    if student not in current_s_ids:
+        db.delete_student(student)
+
 
 @router.get("/")
 def list_students():
@@ -156,6 +140,7 @@ def apply_filters(filters: SearchFilters):
     return filter_students(STUDENTS, filters)
 
 
+# TODO: Add sorting
 @router.post("/search")
 def search(
     filters: SearchFilters,
