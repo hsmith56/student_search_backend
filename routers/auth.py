@@ -6,10 +6,15 @@ import hashlib
 import uuid
 from pydantic import BaseModel
 
-from utils import db  # ✅ now using your db helpers
+from utils import db 
 
 SESSION_COOKIE_NAME = "session_id"
 sessions = {}  # still OK to keep in-memory sessions for simplicity
+REFRESH_COOKIE_NAME = "refresh_token"
+# TTLs in seconds
+SESSION_TTL = 3600  # 1 hour
+REFRESH_TTL = 60 * 60 * 24 * 7  # 7 days
+refresh_tokens = {}
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,17 +38,78 @@ def create_session(username: str, user_id: str, first_name: str) -> str:
     return session_id
 
 
-def get_current_user(session_id: Optional[str] = Cookie(default=None)):
-    if not session_id or session_id not in sessions:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+def create_refresh_token(user_id: str) -> str:
+    token = str(uuid.uuid4())
+    refresh_tokens[token] = {
+        "user_id": user_id,
+        "created_at": datetime.datetime.now(datetime.timezone.utc),
+    }
+    return token
 
-    user_id = sessions[session_id]["user_id"]
-    user = db.read_user(user_id=user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found in database")
-    return user
+
+def get_current_user(
+    response: Response,
+    session_id: Optional[str] = Cookie(default=None),
+    refresh_token: Optional[str] = Cookie(default=None),
+):
+    """Return current user; if session expired but a valid refresh token exists,
+    issue a new session cookie transparently and return the user.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Check existing session
+    if session_id and session_id in sessions:
+        session = sessions[session_id]
+        age = (now - session["created_at"]).total_seconds()
+        if age < SESSION_TTL:
+            user_id = session["user_id"]
+            user = db.read_user(user_id=user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found in database")
+            return user
+        else:
+            # expired session; remove it and fall through to try refresh
+            try:
+                del sessions[session_id]
+            except KeyError:
+                pass
+
+    # Try to refresh using refresh token
+    if refresh_token and refresh_token in refresh_tokens:
+        r = refresh_tokens[refresh_token]
+        age = (now - r["created_at"]).total_seconds()
+        if age < REFRESH_TTL:
+            user_id = r["user_id"]
+            user = db.read_user(user_id=user_id)
+            if not user:
+                # token refers to a missing user; remove token
+                try:
+                    del refresh_tokens[refresh_token]
+                except KeyError:
+                    pass
+                raise HTTPException(status_code=404, detail="User not found in database")
+
+            # create new session and set cookie
+            new_session_id = create_session(user["username"], user["id"], user["first_name"])
+            response.set_cookie(
+                key=SESSION_COOKIE_NAME,
+                value=new_session_id,
+                httponly=True,
+                secure=True,
+                samesite="none",
+                max_age=SESSION_TTL,
+            )
+            return user
+        else:
+            # refresh token expired; remove it
+            try:
+                del refresh_tokens[refresh_token]
+            except KeyError:
+                pass
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+    )
 
 
 @router.post("/login")
@@ -58,14 +124,25 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     session_id = create_session(user["username"], user["id"], user["first_name"])
-
+    # set session cookie
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_id,
         httponly=True,
         secure=True,
         samesite="none",
-        max_age=3600,
+        max_age=SESSION_TTL,
+    )
+
+    # create and set refresh token
+    refresh = create_refresh_token(user["id"])
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        max_age=REFRESH_TTL,
     )
     return {"message": "Logged in successfully"}
 
@@ -78,10 +155,27 @@ def me(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/logout")
-def logout(response: Response, session_id: Optional[str] = Cookie(default=None)):
+def logout(
+    response: Response,
+    session_id: Optional[str] = Cookie(default=None),
+    refresh_token: Optional[str] = Cookie(default=None),
+):
+    # delete session server-side
     if session_id and session_id in sessions:
-        del sessions[session_id]
+        try:
+            del sessions[session_id]
+        except KeyError:
+            pass
+
+    # delete refresh token server-side if provided
+    if refresh_token and refresh_token in refresh_tokens:
+        try:
+            del refresh_tokens[refresh_token]
+        except KeyError:
+            pass
+
     response.delete_cookie(SESSION_COOKIE_NAME)
+    response.delete_cookie(REFRESH_COOKIE_NAME)
     return {"message": "Logged out"}
 
 
