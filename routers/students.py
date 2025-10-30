@@ -2,7 +2,6 @@ import json
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from queue import Full
 from typing import Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -17,11 +16,12 @@ router = APIRouter(prefix="/students", tags=["students"])
 
 
 class OrderBy(str, Enum):
-    s_name = "name"
+    s_name = "first_name"
     s_id = "id"
     country = "country"
     gpa = "gpa"
     age = "adjusted_age"
+    status = "placement_status"
 
 
 class ItemQueryParams(BaseModel):
@@ -161,13 +161,14 @@ def search(
     print(filters)
 
     results = apply_filters(filters)
-    results = [BasicStudent(**x.model_dump()) for x in results]
 
     results = sorted(
         results,
         key=lambda x: x.__getattribute__(params.order_by),
         reverse=params.descending,
     )
+
+    results = [BasicStudent(**x.model_dump()) for x in results]
 
     total = len(results)
     start = (page - 1) * page_size
