@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from utils.db import query_students, get_countries
+from utils.db import query_students, get_countries, get_last_update_time
 
 router = APIRouter(prefix="/misc", tags=["misc"])
 
@@ -29,3 +29,8 @@ def get_unique_countries():
     if isinstance(countries, list):
         return sorted(countries)
     return []
+
+@router.get("/last_update_time")
+def get_update_time():
+    placed = get_last_update_time()
+    return {placed}
