@@ -2,6 +2,7 @@ import json
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from queue import Full
 from typing import Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -128,10 +129,19 @@ def list_students():
 
 
 @router.get("/basic/{usahsId}", response_model=BasicStudent)
-def get_student(usahsId: str):
+def get_basic_student(usahsId: str):
     for student in STUDENTS:
         if student.usahsid.lower() == usahsId.lower():
             return BasicStudent(**student.model_dump())
+    raise HTTPException(status_code=404, detail="Student not found")
+
+
+@router.get("/full/{usahsId}", response_model=FullStudent)
+def get_full_student(usahsId: str):
+    ...
+    for student in STUDENTS:
+        if student.usahsid.lower() == usahsId.lower():
+            return student
     raise HTTPException(status_code=404, detail="Student not found")
 
 
