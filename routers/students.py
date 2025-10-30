@@ -32,7 +32,7 @@ class ItemQueryParams(BaseModel):
 def _full_student_dict(student: dict) -> FullStudent:
     # helper func to avoid having to retype this entire section each time
     return FullStudent(
-        first_name=student["namefirst"] + " - " + student["genderdescription"][0],
+        first_name=student["namefirst"],
         app_id=student["applicationid"],
         pax_id=student["participantid"],
         country=student["residenceCountry"],

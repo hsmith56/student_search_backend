@@ -33,11 +33,13 @@ def initialize_db():
     )
     """)
 
-    # cursor.execute('''
-    # CREATE TABLE IF NOT EXISTS metadata()
-    #                id INTEGER PRIMARY KEY AUTOINCREMENT,
-    #                last_refresh_date TIMESTAMP);
-    #                ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS admin(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        last_refresh_date TIMESTAMP,
+        auth_code TEXT NOT NULL
+        );
+    ''')
 
     connection.commit()
     connection.close()
@@ -237,6 +239,14 @@ def delete_student(app_id):
     connection.commit()
     connection.close()
 
+def get_hashed_auth() -> str:
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+    cursor.execute("""SELECT auth_code FROM admin;"""
+    )
+    auth_code = cursor.fetchall()
+    connection.close()
+    return auth_code[0][0]
 
 initialize_db()
 

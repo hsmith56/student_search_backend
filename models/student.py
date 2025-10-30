@@ -13,32 +13,32 @@ class BasicStudent(BaseModel):
     usahsid: str
     program_type: str
     adjusted_age: int
-    selected_interests: list[str] # use for embeddings
+    selected_interests: list[str]  # use for embeddings
     urban_request: str
     placement_status: str
+    gender_desc: str  # use for embeddings
 
 
 class FullStudent(BasicStudent):
-    gender_desc: str # use for embeddings
     id: int
     current_grade: int
     status: str
-    states: list[str]
+    states: set[str]
     early_placement: Optional[bool] = False
     single_placement: bool
     double_placement: bool
     free_text_interests: list[str]
-    family_description: str # use for embeddings
-    favorite_subjects: str # use for embeddings
-    photo_comments: str # use for embeddings
-    religion: str # use for embeddings
-    allergy_comments: str # use for embeddings
-    dietary_restrictions: str # use for embeddings
+    family_description: str  # use for embeddings
+    favorite_subjects: str  # use for embeddings
+    photo_comments: str  # use for embeddings
+    religion: str  # use for embeddings
+    allergy_comments: str  # use for embeddings
+    dietary_restrictions: str  # use for embeddings
     religious_frequency: int
-    intro_message: str # use for embeddings
-    message_to_host_family: str # use for embeddings
-    message_from_natural_family: str # use for embeddings
+    intro_message: str  # use for embeddings
+    message_to_host_family: str  # use for embeddings
+    message_from_natural_family: str  # use for embeddings
     media_link: str
-    health_comments: list[str] # use for embeddings
+    health_comments: list[str]  # use for embeddings
     live_with_pets: Optional[bool]
     local_coordinator: Optional[str] = ""

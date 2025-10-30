@@ -114,7 +114,6 @@ def get_current_user(
 
 @router.post("/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
-    print("HERE")
     user = db.read_user(username=form_data.username)
 
     if not user:
@@ -191,7 +190,7 @@ def register_user(user: CreateUserRequest):
     if (
         verify_password(
             plain_password=user.code,
-            hashed_password="0d03fb3ebcf6dfc221af83f7bf5d58f0066876ee7ae7caf0d8fbdaa8a1453a74",
+            hashed_password=db.get_hashed_auth(),
         )
         is False
     ):
