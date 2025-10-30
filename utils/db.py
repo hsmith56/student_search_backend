@@ -3,6 +3,8 @@ import uuid
 import json
 import hashlib
 import itertools
+from datetime import datetime
+import pytz
 
 
 # Database setup
@@ -244,9 +246,38 @@ def get_hashed_auth() -> str:
     cursor = connection.cursor()
     cursor.execute("""SELECT auth_code FROM admin;"""
     )
-    auth_code = cursor.fetchall()
+    auth_code = cursor.fetchone()
     connection.close()
-    return auth_code[0][0]
+    return auth_code[0]
+
+def update_time():
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+    cursor.execute("SELECT COUNT(*) FROM admin")
+
+    now_time= datetime.now(pytz.timezone('US/Eastern'))
+
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO admin (last_refresh_date, auth_code) VALUES (?, ?)", 
+                    (now_time, "initial_code"))
+
+    # --- Update the only entry in the table ---
+    cursor.execute("UPDATE admin SET last_refresh_date = ? WHERE id = (SELECT id FROM admin LIMIT 1)",
+                (now_time,))
+    connection.commit()
+    connection.close()
+
+def get_last_update_time():
+    connection = sqlite3.connect("user_auth.db", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+    cursor = connection.cursor()
+    cursor.execute("SELECT last_refresh_date FROM admin")
+    last_refresh_time: datetime = cursor.fetchone()[0]
+    connection.commit()
+    connection.close()
+
+    return last_refresh_time.strftime("%b %d at %H:%M EST")
+
+
 
 initialize_db()
 
