@@ -14,3 +14,9 @@ data/
 
 *.db
 test.py
+logs/
+temp/
+
+.env
+bearer_token
+*.json

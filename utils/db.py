@@ -199,6 +199,24 @@ def query_students(query_param: str, query_val: str):
     students = list(itertools.chain.from_iterable(students))
     return students
 
+def does_student_exist(student_id):
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+
+    cursor.execute(
+        f"""
+    SELECT app_id, placement_status FROM simple_students WHERE app_id = ?
+    """,
+        (student_id,),
+    )
+    student = cursor.fetchone()
+    connection.close()
+
+    if student is None:
+        return None, None
+
+    return student[0], student[1]
+
 
 def get_countries():
     connection = sqlite3.connect("user_auth.db")
@@ -275,7 +293,7 @@ def get_last_update_time():
     connection.commit()
     connection.close()
 
-    return last_refresh_time.strftime("%b %d at %H:%M EST")
+    return last_refresh_time.strftime("%b %d %H:%M EST")
 
 
 
