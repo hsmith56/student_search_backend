@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 import datetime
@@ -6,34 +6,34 @@ import hashlib
 import uuid
 from pydantic import BaseModel
 
-from utils import db 
+from utils import db
 
 SESSION_COOKIE_NAME = "session_id"
 sessions = {}  # still OK to keep in-memory sessions for simplicity
 REFRESH_COOKIE_NAME = "refresh_token"
-# TTLs in seconds
+
 SESSION_TTL = 3600  # 1 hour
 REFRESH_TTL = 60 * 60 * 24 * 7  # 7 days
 refresh_tokens = {}
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router: APIRouter = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def hash_password(password: str):
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def hash_password(password: str) -> str:
+    return hashlib.sha256(string=password.encode(encoding="utf-8")).hexdigest()
 
 
-def verify_password(plain_password, hashed_password):
-    return hash_password(plain_password) == hashed_password
+def verify_password(plain_password, hashed_password) -> Any:
+    return hash_password(password=plain_password) == hashed_password
 
 
 def create_session(username: str, user_id: str, first_name: str) -> str:
-    session_id = str(uuid.uuid4())
+    session_id: str = str(uuid.uuid4())
     sessions[session_id] = {
         "username": username,
         "user_id": user_id,
         "first_name": first_name,
-        "created_at": datetime.datetime.now(datetime.timezone.utc),
+        "created_at": datetime.datetime.now(tz=datetime.timezone.utc),
     }
     return session_id
 
@@ -42,7 +42,7 @@ def create_refresh_token(user_id: str) -> str:
     token = str(uuid.uuid4())
     refresh_tokens[token] = {
         "user_id": user_id,
-        "created_at": datetime.datetime.now(datetime.timezone.utc),
+        "created_at": datetime.datetime.now(tz=datetime.timezone.utc),
     }
     return token
 
@@ -55,7 +55,7 @@ def get_current_user(
     """Return current user; if session expired but a valid refresh token exists,
     issue a new session cookie transparently and return the user.
     """
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
 
     # Check existing session
     if session_id and session_id in sessions:
@@ -65,7 +65,9 @@ def get_current_user(
             user_id = session["user_id"]
             user = db.read_user(user_id=user_id)
             if not user:
-                raise HTTPException(status_code=404, detail="User not found in database")
+                raise HTTPException(
+                    status_code=404, detail="User not found in database"
+                )
             return user
         else:
             # expired session; remove it and fall through to try refresh
@@ -87,10 +89,14 @@ def get_current_user(
                     del refresh_tokens[refresh_token]
                 except KeyError:
                     pass
-                raise HTTPException(status_code=404, detail="User not found in database")
+                raise HTTPException(
+                    status_code=404, detail="User not found in database"
+                )
 
             # create new session and set cookie
-            new_session_id = create_session(user["username"], user["id"], user["first_name"])
+            new_session_id: str = create_session(
+                username=user["username"], user_id=user["id"], first_name=user["first_name"]
+            )
             response.set_cookie(
                 key=SESSION_COOKIE_NAME,
                 value=new_session_id,
@@ -112,17 +118,17 @@ def get_current_user(
     )
 
 
-@router.post("/login")
+@router.post(path="/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     user = db.read_user(username=form_data.username)
 
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    if not verify_password(form_data.password, user["hashed_password"]):
+    if not verify_password(plain_password=form_data.password, hashed_password=user["hashed_password"]):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    session_id = create_session(user["username"], user["id"], user["first_name"])
+    session_id: str = create_session(username=user["username"], user_id=user["id"], first_name=user["first_name"])
     # set session cookie
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -134,7 +140,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     )
 
     # create and set refresh token
-    refresh = create_refresh_token(user["id"])
+    refresh: str = create_refresh_token(user_id=user["id"])
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=refresh,
@@ -146,14 +152,14 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     return {"message": "Logged in successfully"}
 
 
-@router.get("/me")
-def me(current_user: dict = Depends(get_current_user)):
+@router.get(path="/me")
+def me(current_user: dict = Depends(dependency=get_current_user)):
     """Return full user profile from database"""
     user = {key: current_user[key] for key in current_user.keys()}
     return user
 
 
-@router.post("/logout")
+@router.post(path="/logout")
 def logout(
     response: Response,
     session_id: Optional[str] = Cookie(default=None),
@@ -173,8 +179,8 @@ def logout(
         except KeyError:
             pass
 
-    response.delete_cookie(SESSION_COOKIE_NAME)
-    response.delete_cookie(REFRESH_COOKIE_NAME)
+    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    response.delete_cookie(key=REFRESH_COOKIE_NAME)
     return {"message": "Logged out"}
 
 
@@ -185,7 +191,7 @@ class CreateUserRequest(BaseModel):
     code: str
 
 
-@router.post("/register")
+@router.post(path="/register")
 def register_user(user: CreateUserRequest):
     if (
         verify_password(
@@ -201,5 +207,5 @@ def register_user(user: CreateUserRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    db.create_user(user.username, user.password, user.first_name, favorites=[])
+    db.create_user(username=user.username, password=user.password, first_name=user.first_name, favorites=[])
     return {"message": f"User '{user.username}' created successfully"}

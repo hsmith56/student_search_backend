@@ -1,4 +1,5 @@
 import sqlite3
+
 import uuid
 import json
 import hashlib
@@ -8,7 +9,7 @@ import pytz
 
 
 # Database setup
-def initialize_db():
+def initialize_db() -> None:
     connection = sqlite3.connect("user_auth.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
@@ -35,20 +36,29 @@ def initialize_db():
     )
     """)
 
-    cursor.execute('''
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS admin(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         last_refresh_date TIMESTAMP,
         auth_code TEXT NOT NULL
         );
-    ''')
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS feedback( 
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        comment_date TIMESTAMP
+    );
+    """)
 
     connection.commit()
     connection.close()
 
 
 # Create a new user
-def create_user(username, password, first_name, favorites=None):
+def create_user(username, password, first_name, favorites=None) -> None:
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
     if favorites is not None:
@@ -99,7 +109,7 @@ def read_user(username="", user_id=""):
 
 
 # Update user data
-def update_user(username: str, first_name: str = "", favorites=None):
+def update_user(username: str, first_name: str = "", favorites=None) -> None:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     if first_name != "":
@@ -123,7 +133,7 @@ def update_user(username: str, first_name: str = "", favorites=None):
 
 
 # Delete a user
-def delete_user(username):
+def delete_user(username) -> None:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     cursor.execute(
@@ -144,7 +154,7 @@ def add_student(
     program_type: str,
     adjusted_age: int,
     placement_status: str,
-):
+) -> None:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     try:
@@ -170,7 +180,7 @@ def add_student(
         connection.close()
 
 
-def update_student_status(app_id: int, placement_status: str):
+def update_student_status(app_id: int, placement_status: str) -> None:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     cursor.execute(
@@ -199,12 +209,13 @@ def query_students(query_param: str, query_val: str):
     students = list(itertools.chain.from_iterable(students))
     return students
 
-def does_student_exist(student_id):
+
+def does_student_exist(student_id) -> tuple[int | None, str]:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
 
     cursor.execute(
-        f"""
+        """
     SELECT app_id, placement_status FROM simple_students WHERE app_id = ?
     """,
         (student_id,),
@@ -213,12 +224,12 @@ def does_student_exist(student_id):
     connection.close()
 
     if student is None:
-        return None, None
+        return None, ""
 
     return student[0], student[1]
 
 
-def get_countries():
+def get_countries() -> list[str]:
     connection = sqlite3.connect("user_auth.db")
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
@@ -259,34 +270,42 @@ def delete_student(app_id):
     connection.commit()
     connection.close()
 
+
 def get_hashed_auth() -> str:
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
-    cursor.execute("""SELECT auth_code FROM admin;"""
-    )
+    cursor.execute("""SELECT auth_code FROM admin;""")
     auth_code = cursor.fetchone()
     connection.close()
     return auth_code[0]
+
 
 def update_time():
     connection = sqlite3.connect("user_auth.db")
     cursor = connection.cursor()
     cursor.execute("SELECT COUNT(*) FROM admin")
 
-    now_time= datetime.now(pytz.timezone('US/Eastern'))
+    now_time = datetime.now(pytz.timezone("US/Eastern"))
 
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO admin (last_refresh_date, auth_code) VALUES (?, ?)", 
-                    (now_time, "initial_code"))
+        cursor.execute(
+            "INSERT INTO admin (last_refresh_date, auth_code) VALUES (?, ?)",
+            (now_time, "initial_code"),
+        )
 
     # --- Update the only entry in the table ---
-    cursor.execute("UPDATE admin SET last_refresh_date = ? WHERE id = (SELECT id FROM admin LIMIT 1)",
-                (now_time,))
+    cursor.execute(
+        "UPDATE admin SET last_refresh_date = ? WHERE id = (SELECT id FROM admin LIMIT 1)",
+        (now_time,),
+    )
     connection.commit()
     connection.close()
 
-def get_last_update_time():
-    connection = sqlite3.connect("user_auth.db", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+
+def get_last_update_time() -> str:
+    connection = sqlite3.connect(
+        "user_auth.db", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+    )
     cursor = connection.cursor()
     cursor.execute("SELECT last_refresh_date FROM admin")
     last_refresh_time: datetime = cursor.fetchone()[0]
@@ -294,7 +313,6 @@ def get_last_update_time():
     connection.close()
 
     return last_refresh_time.strftime("%b %d %H:%M EST")
-
 
 
 initialize_db()

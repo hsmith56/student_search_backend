@@ -1,9 +1,10 @@
 import json
 import math
+
 import requests
 
 from utils.beacon_auth import gen_auth_code
-from utils.db import does_student_exist, update_student_status
+from utils.db import does_student_exist, update_student_status, update_time
 
 
 def first_filter(data=None):
@@ -18,17 +19,19 @@ def first_filter(data=None):
         if student_id is not None:
             # if student exists, confirm if the status is the same
             if student.get('placementStatusName') != status_in_db:
-                update_student_status(student_id, student.get('placementStatusName'))
+                # if status was unassigned but now is allocated, need to perform update just to ensure values did not change
+                if status_in_db.lower() == "unassigned":
+                    ...
+                update_student_status(app_id=student_id, placement_status=student.get('placementStatusName'))
 
         else:
             ...
 
+    update_time()
 
 
 
 def update_responses() -> None:
-
-    
     PAGE_SIZE = 100
     try:
         AUTH_TOKEN = open("bearer_token", "r").read()

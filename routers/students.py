@@ -2,7 +2,6 @@ import json
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -12,7 +11,7 @@ from models.student import BasicStudent, FullStudent
 from utils import db
 from utils.search_filters import filter_students
 
-router = APIRouter(prefix="/students", tags=["students"])
+router: APIRouter = APIRouter(prefix="/students", tags=["students"])
 
 
 class OrderBy(str, Enum):
@@ -77,19 +76,19 @@ def _full_student_dict(student: dict) -> FullStudent:
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "student_extra_info.json"
 with open(DATA_PATH) as f:
     student_data = json.load(f)
-    STUDENTS: Tuple[FullStudent] = [
+    STUDENTS: list[FullStudent] = [
         _full_student_dict(s)
         for s in student_data
         if s.get("namefirst").lower() != "test"
         and s.get("statussystemname").lower() != "canceled"
     ]
-    PLACED_STUDENTS = [
+    PLACED_STUDENTS: list[FullStudent] = [
         x
         for x in STUDENTS
         if x.placement_status.lower() != "allocated"
         and x.placement_status.lower() != "unassigned"
     ]
-    PLACEABLE_STUDENTS = [
+    PLACEABLE_STUDENTS: list[FullStudent] = [
         x
         for x in STUDENTS
         if x.placement_status.lower() == "allocated"
@@ -123,57 +122,56 @@ for student in _existing_students:
         db.delete_student(student)
 
 
-@router.get("/")
+@router.get(path="/")
 def list_students():
     return {"First Student": PLACEABLE_STUDENTS[0:10]}
 
 
-@router.get("/basic/{usahsId}", response_model=BasicStudent)
-def get_basic_student(usahsId: str):
+@router.get(path="/basic/{app_id}", response_model=BasicStudent)
+def get_basic_student(app_id: int) -> BasicStudent:
     for student in STUDENTS:
-        if student.usahsid.lower() == usahsId.lower():
+        if student.app_id == app_id:
             return BasicStudent(**student.model_dump())
     raise HTTPException(status_code=404, detail="Student not found")
 
 
-@router.get("/full/{usahsId}", response_model=FullStudent)
-def get_full_student(usahsId: str):
+@router.get(path="/full/{app_id}", response_model=FullStudent)
+def get_full_student(app_id: int) -> FullStudent:
     ...
     for student in STUDENTS:
-        if student.usahsid.lower() == usahsId.lower():
+        if student.app_id == app_id:
             return student
     raise HTTPException(status_code=404, detail="Student not found")
 
 
 @lru_cache(maxsize=128)
-def apply_filters(filters: SearchFilters):
-    return filter_students(STUDENTS, filters)
+def apply_filters(filters: SearchFilters) -> list[FullStudent]:
+    return filter_students(students=STUDENTS, filters=filters)
 
 
-# TODO: Add sorting
-@router.post("/search")
+@router.post(path="/search")
 def search(
     filters: SearchFilters,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(21, ge=1, le=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=21, ge=1, le=100),
     params: ItemQueryParams = Depends(),
 ):
     print(filters)
 
-    results = apply_filters(filters)
+    results: list[FullStudent] = apply_filters(filters)  # pyright: ignore[reportRedeclaration, reportAssignmentType]
 
-    results = sorted(
+    results: list[FullStudent] = sorted(  # pyright: ignore[reportRedeclaration]
         results,
         key=lambda x: x.__getattribute__(params.order_by),
         reverse=params.descending,
     )
 
-    results = [BasicStudent(**x.model_dump()) for x in results]
+    results: list[BasicStudent] = [BasicStudent(**x.model_dump()) for x in results]
 
-    total = len(results)
-    start = (page - 1) * page_size
-    end = start + page_size
-    paginated = results[start:end]
+    total: int = len(results)
+    start: int = (page - 1) * page_size
+    end: int = start + page_size
+    paginated: list[BasicStudent] = results[start:end]
 
     return {
         "page": page,
@@ -182,3 +180,8 @@ def search(
         "total_pages": (total + page_size - 1) // page_size,
         "results": paginated,
     }
+
+
+@router.get(path="/update_db")
+def update_student_db() -> None:
+    apply_filters.cache_clear()
