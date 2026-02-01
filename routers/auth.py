@@ -95,7 +95,9 @@ def get_current_user(
 
             # create new session and set cookie
             new_session_id: str = create_session(
-                username=user["username"], user_id=user["id"], first_name=user["first_name"]
+                username=user["username"],
+                user_id=user["id"],
+                first_name=user["first_name"],
             )
             response.set_cookie(
                 key=SESSION_COOKIE_NAME,
@@ -125,10 +127,14 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    if not verify_password(plain_password=form_data.password, hashed_password=user["hashed_password"]):
+    if not verify_password(
+        plain_password=form_data.password, hashed_password=user["hashed_password"]
+    ):
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    session_id: str = create_session(username=user["username"], user_id=user["id"], first_name=user["first_name"])
+    session_id: str = create_session(
+        username=user["username"], user_id=user["id"], first_name=user["first_name"]
+    )
     # set session cookie
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -207,5 +213,10 @@ def register_user(user: CreateUserRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    db.create_user(username=user.username, password=user.password, first_name=user.first_name, favorites=[])
+    db.create_user(
+        username=user.username,
+        password=user.password,
+        first_name=user.first_name,
+        favorites=[],
+    )
     return {"message": f"User '{user.username}' created successfully"}

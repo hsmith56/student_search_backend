@@ -5,11 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def gen_auth_code():
     headers = {
-    "Accept": "application/json, text/plain, */*",
-    "Content-Type": "application/x-www-form-urlencoded",
-}
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
 
     username: str = os.getenv("beacon_username", "")
     password: str = os.getenv("beacon_password", "")
@@ -25,9 +26,7 @@ def gen_auth_code():
     }
 
     response = requests.post(
-        "https://api.ciee.org/beacon/authorization/token", 
-        data=data, 
-        headers=headers
+        "https://api.ciee.org/beacon/authorization/token", data=data, headers=headers
     )
 
     # Auth code generated successfully
