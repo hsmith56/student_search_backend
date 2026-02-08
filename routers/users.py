@@ -1,11 +1,27 @@
 from utils.db import get_favorites
 from fastapi import APIRouter, Depends, Query
-from models.student import BasicStudent
+from models.student import BasicStudent, FullStudent
 from routers.auth import get_current_user
 from utils import db
 import json
+from enum import Enum
+from pydantic import BaseModel
 
 router: APIRouter = APIRouter(prefix="/user", tags=["user"])
+
+
+class OrderBy(str, Enum):
+    s_name = "first_name"
+    s_id = "id"
+    country = "country"
+    gpa = "gpa"
+    age = "adjusted_age"
+    status = "placement_status"
+
+
+class ItemQueryParams(BaseModel):
+    order_by: OrderBy = OrderBy.age
+    descending: bool = True
 
 
 @router.get(path="/", response_model=dict)
@@ -18,6 +34,7 @@ def get_user(current_user=Depends(get_current_user)):
 @router.get(path="/favorites")
 def get_user_favorites(
     current_user=Depends(dependency=get_current_user),
+    params: ItemQueryParams = Depends(),
 ) -> list[BasicStudent]:
     """Return the favorites list for the current user."""
     favorites = []
@@ -28,8 +45,14 @@ def get_user_favorites(
             return []
 
     try:
+        results: list[FullStudent] = get_favorites(favorites)
+        results = sorted(
+            results,
+            key=lambda x: x.__getattribute__(params.order_by),
+            reverse=params.descending,
+        )
         return [
-            BasicStudent(**student.model_dump()) for student in get_favorites(favorites)
+            BasicStudent(**student.model_dump()) for student in results
         ]
     except Exception:
         return []

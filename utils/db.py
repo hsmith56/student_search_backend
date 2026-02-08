@@ -92,14 +92,27 @@ def initialize_db() -> None:
         );
     """)
 
+    # cursor.execute("""DROP TABLE feedback""")
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS feedback( 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
         first_name TEXT NOT NULL,
         comment TEXT NOT NULL,
         comment_date TIMESTAMP
     );
     """)
+
+    cursor.execute("PRAGMA table_info(feedback)")
+    feedback_columns = [row[1] for row in cursor.fetchall()]
+    if "username" not in feedback_columns:
+        cursor.execute(
+            """
+        ALTER TABLE feedback
+        ADD COLUMN username TEXT DEFAULT ''
+        """
+        )
 
     connection.commit()
     connection.close()
@@ -192,6 +205,121 @@ def delete_user(username) -> None:
     )
     connection.commit()
     connection.close()
+
+
+def create_feedback(
+    username: str,
+    first_name: str,
+    comment: str,
+    comment_date: str | None = None,
+) -> int:
+    if comment_date is None:
+        comment_date = datetime.now(pytz.timezone("US/Eastern")).isoformat()
+
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    INSERT INTO feedback (username, first_name, comment, comment_date)
+    VALUES (?, ?, ?, ?)
+    """,
+        (username, first_name, comment, comment_date),
+    )
+    feedback_id = cursor.lastrowid
+    connection.commit()
+    connection.close()
+    return int(feedback_id)  # ty:ignore[invalid-argument-type]
+
+
+def get_feedback(feedback_id: int):
+    connection = sqlite3.connect("user_auth.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, username, first_name, comment, comment_date
+    FROM feedback
+    WHERE id = ?
+    """,
+        (feedback_id,),
+    )
+    feedback = cursor.fetchone()
+    connection.close()
+    return dict(feedback) if feedback else None
+
+
+def list_feedback() -> list[dict]:
+    connection = sqlite3.connect("user_auth.db")
+    connection.row_factory = sqlite3.Row
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, username, first_name, comment, comment_date
+    FROM feedback
+    ORDER BY id DESC
+    """
+    )
+    feedback_rows = cursor.fetchall()
+    connection.close()
+    return [dict(row) for row in feedback_rows]
+
+
+def update_feedback(
+    feedback_id: int,
+    username: str | None = None,
+    first_name: str | None = None,
+    comment: str | None = None,
+) -> bool:
+    updates = []
+    values = []
+
+    if username is not None:
+        updates.append("username = ?")
+        values.append(username)
+    if first_name is not None:
+        updates.append("first_name = ?")
+        values.append(first_name)
+    if comment is not None:
+        updates.append("comment = ?")
+        values.append(comment)
+
+    # Keep comment_date as "last modified" timestamp.
+    updates.append("comment_date = ?")
+    values.append(datetime.now(pytz.timezone("US/Eastern")).isoformat())
+
+    values.append(feedback_id)
+    set_clause = ", ".join(updates)
+
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+    cursor.execute(
+        f"""
+    UPDATE feedback
+    SET {set_clause}
+    WHERE id = ?
+    """,
+        tuple(values),
+    )
+    updated = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return updated
+
+
+def delete_feedback(feedback_id: int) -> bool:
+    connection = sqlite3.connect("user_auth.db")
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    DELETE FROM feedback
+    WHERE id = ?
+    """,
+        (feedback_id,),
+    )
+    deleted = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return deleted
 
 
 def add_student_basic_overview(student) -> None:
@@ -472,8 +600,8 @@ def row_to_student(row: sqlite3.Row) -> FullStudent:
         status=data["status"],
         states=set(from_json(data["states"], [])),
         early_placement=int_to_bool(data["early_placement"]),
-        single_placement=int_to_bool(data["single_placement"]),
-        double_placement=int_to_bool(data["double_placement"]),
+        single_placement=int_to_bool(data["single_placement"]),  # ty:ignore[invalid-argument-type]
+        double_placement=int_to_bool(data["double_placement"]),  # ty:ignore[invalid-argument-type]
         free_text_interests=from_json(data["free_text_interests"], []),
         family_description=data["family_description"],
         favorite_subjects=data["favorite_subjects"],
