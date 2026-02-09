@@ -40,6 +40,7 @@ def _record_placement_event(**event) -> None:
 def update_simple_student_view(student) -> bool:
     requires_stage_2 = False
     current_status = student.get("placementStatusName")
+    first_name = student.get("paxNameFirst")
     application_id = _first_int(student, ("applicationId",))
     coordinator_id = _first_int(
         student, ("localCoordinatorId", "coordinatorId", "lcId")
@@ -69,6 +70,7 @@ def update_simple_student_view(student) -> bool:
             )
             _record_placement_event(
                 student_id=int(student_id),
+                first_name=first_name,
                 event_type="status_changed",
                 placement_state="",
                 coordinator_id=coordinator_id,
@@ -88,6 +90,7 @@ def update_simple_student_view(student) -> bool:
         if application_id is not None:
             _record_placement_event(
                 student_id=application_id,
+                first_name=first_name,
                 event_type="student_added",
                 placement_state=current_status,
                 coordinator_id=coordinator_id,

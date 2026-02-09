@@ -7,6 +7,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from repositories.admin import initialize_db
 from core.logging_config import setup_logging
 from repositories.student_placement_events import create_unassigned_to_allocated_event
 
@@ -45,11 +46,19 @@ def main() -> None:
         default=None,
         help="Optional ISO timestamp override (default: current US/Eastern time).",
     )
+    parser.add_argument(
+        "--first-name",
+        type=str,
+        default="Random Name",
+        help="Optional student first name override for the feed row.",
+    )
     args = parser.parse_args()
 
     setup_logging()
+    initialize_db()
     event_id = create_unassigned_to_allocated_event(
         student_id=args.student_id,
+        first_name=args.first_name,
         coordinator_id=args.coordinator_id,
         manager_id=args.manager_id,
         event_at=args.event_at,

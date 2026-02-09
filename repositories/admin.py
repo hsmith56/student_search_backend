@@ -108,6 +108,7 @@ def initialize_db() -> None:
     CREATE TABLE IF NOT EXISTS student_placement_events(
         event_id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
+        first_name TEXT,
         event_type TEXT NOT NULL,
         event_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         placement_state TEXT,
@@ -140,6 +141,16 @@ def initialize_db() -> None:
             """
         ALTER TABLE feedback
         ADD COLUMN username TEXT DEFAULT ''
+        """
+        )
+
+    cursor.execute("PRAGMA table_info(student_placement_events)")
+    student_placement_event_columns = [row[1] for row in cursor.fetchall()]
+    if "first_name" not in student_placement_event_columns:
+        cursor.execute(
+            """
+        ALTER TABLE student_placement_events
+        ADD COLUMN first_name TEXT
         """
         )
 

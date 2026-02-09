@@ -5,9 +5,27 @@ import pytz
 from repositories.base import get_connection
 
 
+def _get_student_first_name(student_id: int) -> str | None:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT paxNameFirst
+    FROM student_basic_overview
+    WHERE applicationId = ?
+    LIMIT 1
+    """,
+        (student_id,),
+    )
+    row = cursor.fetchone()
+    connection.close()
+    return str(row[0]) if row and row[0] not in (None, "") else None
+
+
 def create_student_placement_event(
     student_id: int,
     event_type: str,
+    first_name: str | None = None,
     placement_state: str | None = None,
     coordinator_id: int | None = None,
     manager_id: int | None = None,
@@ -17,6 +35,8 @@ def create_student_placement_event(
 ) -> int:
     if event_at is None:
         event_at = datetime.now(pytz.timezone("US/Eastern")).isoformat()
+    if first_name in (None, ""):
+        first_name = _get_student_first_name(student_id)
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -24,6 +44,7 @@ def create_student_placement_event(
         """
     INSERT INTO student_placement_events (
         student_id,
+        first_name,
         event_type,
         event_at,
         placement_state,
@@ -32,10 +53,11 @@ def create_student_placement_event(
         status_from,
         status_to
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         (
             student_id,
+            first_name,
             event_type,
             event_at,
             placement_state,
@@ -53,12 +75,14 @@ def create_student_placement_event(
 
 def create_unassigned_to_allocated_event(
     student_id: int,
+    first_name: str | None = None,
     coordinator_id: int | None = None,
     manager_id: int | None = None,
     event_at: str | None = None,
 ) -> int:
     return create_student_placement_event(
         student_id=student_id,
+        first_name=first_name,
         event_type="status_changed",
         placement_state="Allocated",
         coordinator_id=coordinator_id,
@@ -90,7 +114,7 @@ def list_student_placement_events(
     if student_id is None:
         cursor.execute(
             """
-        SELECT event_id, student_id, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
+        SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
         FROM student_placement_events
         ORDER BY event_at DESC, event_id DESC
         LIMIT ?
@@ -100,7 +124,7 @@ def list_student_placement_events(
     else:
         cursor.execute(
             """
-        SELECT event_id, student_id, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
+        SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
         FROM student_placement_events
         WHERE student_id = ?
         ORDER BY event_at DESC, event_id DESC
@@ -130,7 +154,7 @@ def list_unassigned_to_allocated_events_after(
     cursor = connection.cursor()
     cursor.execute(
         """
-    SELECT event_id, student_id, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
+    SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
     FROM student_placement_events
     WHERE event_id > ?
       AND LOWER(COALESCE(status_from, '')) = LOWER(?)
