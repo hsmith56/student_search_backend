@@ -4,8 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from core.logging_config import setup_logging
+from core.placement_notifications import placement_notification_hub
 from repositories.admin import initialize_db
-from routers import misc, students, auth, users, feedback 
+from routers import auth, feedback, misc, news_feed, notifications, students, users
 
 setup_logging()
 
@@ -24,9 +25,16 @@ app.include_router(students.router, dependencies=[Depends(get_current_user)])
 app.include_router(misc.router, dependencies=[Depends(get_current_user)])
 app.include_router(users.router, dependencies=[Depends(get_current_user)])
 app.include_router(feedback.router, dependencies=[Depends(get_current_user)])
+app.include_router(news_feed.router, dependencies=[Depends(get_current_user)])
+app.include_router(notifications.router)
 
 
 @app.on_event("startup")
-def startup_init() -> None:
+async def startup_init() -> None:
     initialize_db()
-    
+    await placement_notification_hub.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_cleanup() -> None:
+    await placement_notification_hub.stop()

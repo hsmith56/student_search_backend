@@ -3,31 +3,79 @@ import math
 import logging
 
 from integrations.beacon_client import beacon_client
+from repositories.student_placement_events import create_student_placement_event
 from repositories.students import (
     add_student_basic_overview,
     does_student_exist_basic_overview,
-    update_student_status_basic_overview, update_student_status_full,
+    update_student_status_basic_overview,
+    update_student_status_full,
 )
 
 logger = logging.getLogger(__name__)
 
 
+def _first_int(student: dict, keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        value = student.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _record_placement_event(**event) -> None:
+    try:
+        create_student_placement_event(**event)
+    except Exception as exc:
+        logger.warning(
+            "Unable to store placement event for student_id=%s: %s",
+            event.get("student_id"),
+            exc,
+        )
+
+
 def update_simple_student_view(student) -> bool:
     requires_stage_2 = False
+    current_status = student.get("placementStatusName")
+    application_id = _first_int(student, ("applicationId",))
+    coordinator_id = _first_int(
+        student, ("localCoordinatorId", "coordinatorId", "lcId")
+    )
+    manager_id = _first_int(
+        student, ("managerId", "regionalManagerId", "placementManagerId")
+    )
+
     student_id, status_in_db = does_student_exist_basic_overview(
         student.get("applicationId")
     )
     if student_id is not None:
         # if student exists, confirm if the status is the same
 
-        if student.get("placementStatusName") != status_in_db:
+        if current_status != status_in_db:
             # if status was unassigned but now is allocated, need to perform update just to ensure values did not change
             if status_in_db.lower() == "unassigned":
+                logger.info(student)
                 requires_stage_2 = True
             update_student_status_basic_overview(
-                app_id=student_id, placement_status=student.get("placementStatusName")
+                app_id=student_id, placement_status=current_status
             )
-            update_student_status_full(app_id=student_id, placement_status=student.get("placementStatusName"), usahs_id=student.get("usaHsId"))
+            update_student_status_full(
+                app_id=student_id,
+                placement_status=current_status,
+                usahs_id=student.get("usaHsId"),
+            )
+            _record_placement_event(
+                student_id=int(student_id),
+                event_type="status_changed",
+                placement_state="",
+                coordinator_id=coordinator_id,
+                manager_id=manager_id,
+                status_from=status_in_db,
+                status_to=current_status,
+            )
         else:
             # status has not changed, no need to do anything additonal
             # update_student_status_basic_overview(
@@ -37,6 +85,15 @@ def update_simple_student_view(student) -> bool:
     else:
         # student does not exist, need to add student to the database
         add_student_basic_overview(student)
+        if application_id is not None:
+            _record_placement_event(
+                student_id=application_id,
+                event_type="student_added",
+                placement_state=current_status,
+                coordinator_id=coordinator_id,
+                manager_id=manager_id,
+                status_to=current_status,
+            )
         requires_stage_2 = True
 
     return requires_stage_2

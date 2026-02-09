@@ -48,14 +48,12 @@ def create_refresh_token(user_id: str) -> str:
     return token
 
 
-def get_current_user(
-    response: Response,
-    session_id: Optional[str] = Cookie(default=None),
-    refresh_token: Optional[str] = Cookie(default=None),
-):
-    """Return current user; if session expired but a valid refresh token exists,
-    issue a new session cookie transparently and return the user.
-    """
+def _authenticate_from_cookie_values(
+    *,
+    session_id: Optional[str],
+    refresh_token: Optional[str],
+    issue_new_session_on_refresh: bool,
+) -> tuple[Any, str | None]:
     now = datetime.datetime.now(tz=datetime.timezone.utc)
 
     # Check existing session
@@ -69,15 +67,15 @@ def get_current_user(
                 raise HTTPException(
                     status_code=404, detail="User not found in database"
                 )
-            return user
-        else:
-            # expired session; remove it and fall through to try refresh
-            try:
-                del sessions[session_id]
-            except KeyError:
-                pass
+            return user, None
 
-    # Try to refresh using refresh token
+        # Expired session; remove it and fall through to try refresh.
+        try:
+            del sessions[session_id]
+        except KeyError:
+            pass
+
+    # Try to refresh using refresh token.
     if refresh_token and refresh_token in refresh_tokens:
         r = refresh_tokens[refresh_token]
         age = (now - r["created_at"]).total_seconds()
@@ -85,7 +83,6 @@ def get_current_user(
             user_id = r["user_id"]
             user = read_user(user_id=user_id)
             if not user:
-                # token refers to a missing user; remove token
                 try:
                     del refresh_tokens[refresh_token]
                 except KeyError:
@@ -94,31 +91,60 @@ def get_current_user(
                     status_code=404, detail="User not found in database"
                 )
 
-            # create new session and set cookie
-            new_session_id: str = create_session(
-                username=user["username"],
-                user_id=user["id"],
-                first_name=user["first_name"],
-            )
-            response.set_cookie(
-                key=SESSION_COOKIE_NAME,
-                value=new_session_id,
-                httponly=True,
-                secure=True,
-                samesite="none",
-                max_age=SESSION_TTL,
-            )
-            return user
-        else:
-            # refresh token expired; remove it
-            try:
-                del refresh_tokens[refresh_token]
-            except KeyError:
-                pass
+            if issue_new_session_on_refresh:
+                new_session_id = create_session(
+                    username=user["username"],
+                    user_id=user["id"],
+                    first_name=user["first_name"],
+                )
+                return user, new_session_id
+            return user, None
+
+        # Refresh token expired; remove it.
+        try:
+            del refresh_tokens[refresh_token]
+        except KeyError:
+            pass
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
     )
+
+
+def get_current_user_for_websocket(
+    *, session_id: Optional[str], refresh_token: Optional[str]
+):
+    user, _ = _authenticate_from_cookie_values(
+        session_id=session_id,
+        refresh_token=refresh_token,
+        issue_new_session_on_refresh=False,
+    )
+    return user
+
+
+def get_current_user(
+    response: Response,
+    session_id: Optional[str] = Cookie(default=None),
+    refresh_token: Optional[str] = Cookie(default=None),
+):
+    """Return current user; if session expired but a valid refresh token exists,
+    issue a new session cookie transparently and return the user.
+    """
+    user, new_session_id = _authenticate_from_cookie_values(
+        session_id=session_id,
+        refresh_token=refresh_token,
+        issue_new_session_on_refresh=True,
+    )
+    if new_session_id:
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=new_session_id,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=SESSION_TTL,
+        )
+    return user
 
 
 @router.post(path="/login")

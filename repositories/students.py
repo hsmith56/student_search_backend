@@ -6,6 +6,7 @@ from typing import Any
 
 from models.student import FullStudent
 from repositories.base import get_connection
+from repositories.student_placement_events import create_student_placement_event
 from utils.common_utils import _full_student_dict
 
 logger = logging.getLogger(__name__)
@@ -327,3 +328,62 @@ def get_favorites(favorites_list: list[int]) -> list[FullStudent]:
     connection.close()
 
     return list_of_all_students
+
+
+def randomly_switch_allocated_students_to_unassigned(count: int = 3) -> list[int]:
+    if count <= 0:
+        return []
+
+    with get_connection(row_factory=True) as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+        SELECT applicationId
+        FROM student_basic_overview
+        WHERE LOWER(placementStatusName) = LOWER(?)
+        ORDER BY RANDOM()
+        LIMIT ?
+        """,
+            ("Allocated", count),
+        )
+        selected = [int(row[0]) for row in cursor.fetchall()]
+
+        if len(selected) == 0:
+            return []
+
+        placeholders = ",".join("?" for _ in selected)
+        cursor.execute(
+            f"""
+        UPDATE student_basic_overview
+        SET placementStatusName = ?
+        WHERE applicationId IN ({placeholders})
+        """,
+            ("Unassigned", *selected),
+        )
+        cursor.execute(
+            f"""
+        UPDATE student_full_view
+        SET placement_status = ?
+        WHERE app_id IN ({placeholders})
+        """,
+            ("Unassigned", *selected),
+        )
+        connection.commit()
+
+    for app_id in selected:
+        try:
+            create_student_placement_event(
+                student_id=app_id,
+                event_type="test_status_override",
+                placement_state="Unassigned",
+                status_from="Allocated",
+                status_to="Unassigned",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Unable to store test placement event for student_id=%s: %s",
+                app_id,
+                exc,
+            )
+
+    return selected

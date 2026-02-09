@@ -534,25 +534,3 @@ def run_stage_2_multi_threaded(students):
             fill_out_student,
             ((student) for student in students),
         )
-
-
-# def test():
-#     # data = json.load(open(r'C:\Users\Harrison\Desktop\Development\Student_Search\Backend\utils\response_json.json'))
-
-#     check_point = 327490
-#     check_point_reached = False
-#     data = read_students()
-#     for student in data:
-#         if student["applicationId"] == check_point:
-#             check_point_reached = True
-#             continue
-#         if check_point_reached is True:
-#             fill_out_student(student)
-#         else:
-#             ...
-
-#     # with ThreadPoolExecutor(max_workers=THREADS) as pool:
-#     #     pool.map(
-#     #         fill_out_student,
-#     #         (( student) for student in data["results"]),
-#     #     )

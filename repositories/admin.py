@@ -103,6 +103,36 @@ def initialize_db() -> None:
     """
     )
 
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS student_placement_events(
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        event_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        placement_state TEXT,
+        coordinator_id INTEGER,
+        manager_id INTEGER,
+        status_from TEXT,
+        status_to TEXT
+    );
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_student_placement_events_student_time
+    ON student_placement_events(student_id, event_at DESC);
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_student_placement_events_type
+    ON student_placement_events(event_type);
+    """
+    )
+
     cursor.execute("PRAGMA table_info(feedback)")
     feedback_columns = [row[1] for row in cursor.fetchall()]
     if "username" not in feedback_columns:
