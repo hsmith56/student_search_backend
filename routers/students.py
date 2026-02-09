@@ -1,4 +1,5 @@
 import logging
+import time
 
 from repositories.admin import update_time
 from repositories.students import get_all_full_students, get_full_student_by_id
@@ -80,11 +81,14 @@ def search(
 
 @router.post(path="/update_db")
 def update_student_db() -> dict:
+    start = time.perf_counter()
     students_needing_stage_2 = get_updates_from_beacon()
     processed = len(students_needing_stage_2)
     if len(students_needing_stage_2) != 0:
         run_stage_2_multi_threaded(students_needing_stage_2)
 
+    end = time.perf_counter()
+
     update_time()
     apply_filters.cache_clear()
-    return {"message": "Student refresh completed", "stage_2_processed": processed}
+    return {"message": "Student refresh completed", "stage_2_processed": processed, "total_time": end-start}

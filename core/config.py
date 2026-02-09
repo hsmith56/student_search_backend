@@ -74,6 +74,14 @@ class Settings:
         self.beacon_retry_backoff_seconds = _to_int(
             os.getenv("BEACON_RETRY_BACKOFF_SECONDS"), default=1
         )
+        self.beacon_stage1_page_fetch_workers = max(
+            1,
+            _to_int(os.getenv("BEACON_STAGE1_PAGE_FETCH_WORKERS"), default=4),
+        )
+        self.beacon_stage1_db_read_workers = max(
+            1,
+            _to_int(os.getenv("BEACON_STAGE1_DB_READ_WORKERS"), default=16),
+        )
         self.log_dir = _resolve_path(os.getenv("LOG_DIR"), default=Path("log"))
         self.log_file_name = os.getenv("LOG_FILE_NAME", "app.log")
         self.log_level = os.getenv("LOG_LEVEL", "INFO").upper()

@@ -1,3 +1,4 @@
+import time
 import logging
 
 from core.logging_config import setup_logging
@@ -13,7 +14,12 @@ def main() -> None:
     setup_logging()
     initialize_db()
 
+    logger.info("Starting refresh")
+    start = time.perf_counter()
     students_needing_stage_2 = get_updates_from_beacon()
+    end = time.perf_counter()
+
+    logger.info(f"Total time: {end-start}")
     if len(students_needing_stage_2) > 0:
         run_stage_2_multi_threaded(students_needing_stage_2)
 
