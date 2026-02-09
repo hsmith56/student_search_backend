@@ -51,6 +51,36 @@ def create_student_placement_event(
     return int(event_id)  # ty:ignore[invalid-argument-type]
 
 
+def create_unassigned_to_allocated_event(
+    student_id: int,
+    coordinator_id: int | None = None,
+    manager_id: int | None = None,
+    event_at: str | None = None,
+) -> int:
+    return create_student_placement_event(
+        student_id=student_id,
+        event_type="status_changed",
+        placement_state="Allocated",
+        coordinator_id=coordinator_id,
+        manager_id=manager_id,
+        status_from="Unassigned",
+        status_to="Allocated",
+        event_at=event_at,
+    )
+
+
+def clear_student_placement_events() -> int:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT COUNT(*) FROM student_placement_events")
+    existing_count = cursor.fetchone()
+    rows_to_delete = int(existing_count[0]) if existing_count is not None else 0
+    cursor.execute("DELETE FROM student_placement_events")
+    connection.commit()
+    connection.close()
+    return rows_to_delete
+
+
 def list_student_placement_events(
     *, student_id: int | None = None, limit: int = 100
 ) -> list[dict]:

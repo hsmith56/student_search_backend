@@ -5,6 +5,8 @@
 - `uv run fastapi run`
 - `uv run python scripts/refresh_students.py` (manual refresh script)
 - `uv run python scripts/switch_allocated_to_unassigned.py --count 5` allows for easy swapping of students from allocated to unassigned for testing
+- `uv run python scripts/clear_news_feed.py` clears all feed events
+- `uv run python scripts/add_news_feed_event.py --student-id 12345` inserts a feed event (`Unassigned -> Allocated`) that will be broadcast if websocket notifier is running
 
 ## .env Configuration
 The app now reads centralized settings from `.env` via `core/config.py`.

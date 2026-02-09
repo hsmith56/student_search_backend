@@ -54,7 +54,9 @@ def update_student_status_basic_overview(app_id: int, placement_status: str) -> 
     connection.close()
 
 
-def update_student_status_full(app_id: int, placement_status: str, usahs_id: str) -> None:
+def update_student_status_full(
+    app_id: int, placement_status: str, usahs_id: str
+) -> None:
     try:
         with get_connection() as connection:
             cursor = connection.cursor()
@@ -82,7 +84,6 @@ def update_student_status_full(app_id: int, placement_status: str, usahs_id: str
     except Exception as e:
         logger.warning(f"Student - {app_id}: {e}")
     connection.close()
-
 
 
 def query_full_students(query_param: str, query_val: str):
