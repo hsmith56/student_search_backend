@@ -6,11 +6,10 @@ from datetime import datetime
 from pathlib import Path
 
 import json
-import requests
 from core.config import settings
+from integrations.beacon_client import beacon_client
+from repositories.students import insert_full_student
 from requests.exceptions import JSONDecodeError
-from utils.beacon_auth import gen_auth_code
-from utils.db import insert_full_student
 
 
 sports_mapping_json_p = (
@@ -47,35 +46,18 @@ BASE_HEADERS = {
 }
 
 
-def _get_headers() -> dict[str, str]:
-    try:
-        with open(settings.bearer_token_path, "r", encoding="utf-8") as token_file:
-            auth_token = token_file.read().strip()
-    except FileNotFoundError:
-        auth_token = gen_auth_code()
-
-    if auth_token is None or auth_token == "":
-        auth_token = gen_auth_code()
-    if auth_token is None or auth_token == "":
-        raise RuntimeError("Unable to authenticate with beacon")
-
-    headers = BASE_HEADERS.copy()
-    headers["Authorization"] = auth_token
-    return headers
-
-
 def get_basic_information(application_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/participant/phi/application/{application_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
 
 def get_category_mappings(application_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/sections/standardtype/{application_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
@@ -87,9 +69,9 @@ def get_health_information(field_id):
     # "anyPhysicalDisabilityComment":"","hasPreexistingMedicalConditions":false,"preexistingMedicalConditionsComment":"",
     # "isThereAnyMedicalInfoImportantForCIEE":false,"anyMedicalInfoImportantForCIEEComment":"",
     # "isFullyVaccinatedAgainstCovid19":true}
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/participant/hsjhealthInformation/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
@@ -101,25 +83,25 @@ def get_personal_information(field_id):
     # environmentLiveWithPetsComment":"I am allergic to pet fur.","environmentAllergies":true,
     # "environmentAllergiesComment":"Pet fur, hay, pollen, carrots, dry grass","earliestArrivalDate":"",
     # "latestDepartureDate":""}
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/Participant/ppi/section/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
 
 def get_interests_hobbies(field_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/Participant/psii/section/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
 
 def get_host_family_messages(field_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/Participant/hostfamilymessages/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response
 
@@ -127,7 +109,7 @@ def get_host_family_messages(field_id):
 def get_photo_details(application_id):
     comments = ""
     url = f"{BASE_URL}/beacon/File/GetS3DocumentUrls/{application_id}/Other%20Photos"
-    response = requests.get(url, headers=_get_headers())
+    response = beacon_client.get(url, headers=BASE_HEADERS)
     try:
         json_response = response.json()
     except JSONDecodeError:
@@ -142,9 +124,9 @@ def get_photo_details(application_id):
 
 
 def get_program_type(application_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/Participant/{application_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     return response.json()["productName"]
 
@@ -169,9 +151,9 @@ def get_placement_requests(field_id):
 
     """
 
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/Participant/j1placement/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     r_json = response.json()
     single_placement = r_json.get("willingToAcceptSinglePersonPlacement")
@@ -233,9 +215,9 @@ def get_placement_requests(field_id):
 
 
 def get_media(field_id):
-    response = requests.get(
+    response = beacon_client.get(
         f"{BASE_URL}/beacon/participant/video/section/{field_id}",
-        headers=_get_headers(),
+        headers=BASE_HEADERS,
     )
     r_json = response.json()
     return r_json
@@ -367,7 +349,11 @@ def fill_out_student(student):
     response = get_basic_information(student["applicationId"])
 
     if response.status_code >= 400:
-        logger.info("Dropping student %s due to status code %s", student["applicationId"], response.status_code)
+        logger.info(
+            "Dropping student %s due to status code %s",
+            student["applicationId"],
+            response.status_code,
+        )
     student.update(response.json())
 
     if student["statussystemname"] in [
@@ -376,7 +362,11 @@ def fill_out_student(student):
         "sentbacktoapplicant",
         "sentbacktointernationalrepresentative",
     ]:
-        logger.info("Dropping student %s due to status %s", student["applicationId"], student["statussystemname"])
+        logger.info(
+            "Dropping student %s due to status %s",
+            student["applicationId"],
+            student["statussystemname"],
+        )
         return
 
     drop_keys = [
@@ -400,7 +390,9 @@ def fill_out_student(student):
         student.pop(key)
 
     # mappings is necessary for fetching information in subsequent calls
-    logger.debug("Starting stage 2 hydration for application_id=%s", student["applicationid"])
+    logger.debug(
+        "Starting stage 2 hydration for application_id=%s", student["applicationid"]
+    )
 
     comments = get_photo_details(student["applicationid"])
     student.update({"photo_comments": comments})
@@ -430,7 +422,9 @@ def fill_out_student(student):
         logger.debug("Student marked preplacement and uninterested in normal placement")
         student.update({"statussystemname": "preplacement"})
     elif pre_p is not None and pre_p is True:
-        logger.debug("Student marked preplacement and possibly interested in normal placement")
+        logger.debug(
+            "Student marked preplacement and possibly interested in normal placement"
+        )
         student.update({"statussystemname": "preplacement"})
     student.update({"states": hsjPlacementOptions})
     student.update({"early_placement": early_placement})
@@ -533,12 +527,14 @@ def fill_out_student(student):
 
     insert_full_student(student)
 
+
 def run_stage_2_multi_threaded(students):
     with ThreadPoolExecutor(max_workers=THREADS) as pool:
         pool.map(
             fill_out_student,
-            (( student) for student in students),
+            ((student) for student in students),
         )
+
 
 # def test():
 #     # data = json.load(open(r'C:\Users\Harrison\Desktop\Development\Student_Search\Backend\utils\response_json.json'))

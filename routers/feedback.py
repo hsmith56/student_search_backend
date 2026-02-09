@@ -1,8 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from repositories.feedback import (
+    create_feedback as create_feedback_repo,
+    delete_feedback,
+    get_feedback,
+    list_feedback,
+    update_feedback,
+)
 from routers.auth import get_current_user
-from utils import db
 
 router: APIRouter = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -29,11 +35,12 @@ class FeedbackItem(BaseModel):
 def create_feedback(
     payload: FeedbackCreateRequest, current_user=Depends(get_current_user)
 ) -> FeedbackItem:
-    feedback_id = db.create_feedback(
+    feedback_id = create_feedback_repo(
         username=current_user["username"],
-        first_name=current_user["first_name"], comment=payload.comment
+        first_name=current_user["first_name"],
+        comment=payload.comment,
     )
-    created = db.get_feedback(feedback_id=feedback_id)
+    created = get_feedback(feedback_id=feedback_id)
     if created is None:
         raise HTTPException(status_code=500, detail="Failed to create feedback")
     return FeedbackItem(**created)
@@ -41,12 +48,12 @@ def create_feedback(
 
 @router.get(path="/", response_model=list[FeedbackItem])
 def get_feedback_items() -> list[FeedbackItem]:
-    return [FeedbackItem(**item) for item in db.list_feedback()]
+    return [FeedbackItem(**item) for item in list_feedback()]
 
 
 @router.get(path="/{feedback_id}", response_model=FeedbackItem)
 def get_feedback_item(feedback_id: int) -> FeedbackItem:
-    feedback = db.get_feedback(feedback_id=feedback_id)
+    feedback = get_feedback(feedback_id=feedback_id)
     if feedback is None:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return FeedbackItem(**feedback)
@@ -63,7 +70,7 @@ def update_feedback_item(
     ):
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
-    updated = db.update_feedback(
+    updated = update_feedback(
         feedback_id=feedback_id,
         username=payload.username,
         first_name=payload.first_name,
@@ -72,7 +79,7 @@ def update_feedback_item(
     if updated is False:
         raise HTTPException(status_code=404, detail="Feedback not found")
 
-    feedback = db.get_feedback(feedback_id=feedback_id)
+    feedback = get_feedback(feedback_id=feedback_id)
     if feedback is None:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return FeedbackItem(**feedback)
@@ -80,7 +87,7 @@ def update_feedback_item(
 
 @router.delete(path="/{feedback_id}")
 def delete_feedback_item(feedback_id: int) -> dict:
-    deleted = db.delete_feedback(feedback_id=feedback_id)
+    deleted = delete_feedback(feedback_id=feedback_id)
     if deleted is False:
         raise HTTPException(status_code=404, detail="Feedback not found")
     return {"message": "Feedback deleted"}

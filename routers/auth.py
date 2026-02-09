@@ -6,7 +6,8 @@ import hashlib
 import uuid
 from pydantic import BaseModel
 
-from utils import db
+from repositories.admin import get_hashed_auth
+from repositories.users import create_user, read_user
 
 SESSION_COOKIE_NAME = "session_id"
 sessions = {}  # still OK to keep in-memory sessions for simplicity
@@ -63,7 +64,7 @@ def get_current_user(
         age = (now - session["created_at"]).total_seconds()
         if age < SESSION_TTL:
             user_id = session["user_id"]
-            user = db.read_user(user_id=user_id)
+            user = read_user(user_id=user_id)
             if not user:
                 raise HTTPException(
                     status_code=404, detail="User not found in database"
@@ -82,7 +83,7 @@ def get_current_user(
         age = (now - r["created_at"]).total_seconds()
         if age < REFRESH_TTL:
             user_id = r["user_id"]
-            user = db.read_user(user_id=user_id)
+            user = read_user(user_id=user_id)
             if not user:
                 # token refers to a missing user; remove token
                 try:
@@ -122,7 +123,7 @@ def get_current_user(
 
 @router.post(path="/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
-    user = db.read_user(username=form_data.username)
+    user = read_user(username=form_data.username)
 
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
@@ -202,18 +203,18 @@ def register_user(user: CreateUserRequest):
     if (
         verify_password(
             plain_password=user.code,
-            hashed_password=db.get_hashed_auth(),
+            hashed_password=get_hashed_auth(),
         )
         is False
     ):
         raise HTTPException(status_code=401, detail="Invalid signup code provided")
 
-    existing = db.read_user(username=user.username)
+    existing = read_user(username=user.username)
 
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    db.create_user(
+    create_user(
         username=user.username,
         password=user.password,
         first_name=user.first_name,

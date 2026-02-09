@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from utils.db import query_full_students, get_countries, get_last_update_time
+from repositories.admin import get_last_update_time
+from repositories.students import get_countries, query_full_students
 
 router: APIRouter = APIRouter(prefix="/misc", tags=["misc"])
 

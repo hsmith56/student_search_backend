@@ -2,14 +2,11 @@ import json
 import math
 import logging
 
-import requests
-
-from core.config import settings
-from utils.beacon_auth import gen_auth_code
-from utils.db import (
+from integrations.beacon_client import beacon_client
+from repositories.students import (
+    add_student_basic_overview,
     does_student_exist_basic_overview,
     update_student_status_basic_overview,
-    add_student_basic_overview,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,14 +33,15 @@ def update_simple_student_view(student) -> bool:
         # student does not exist, need to add student to the database
         add_student_basic_overview(student)
         requires_stage_2 = True
-    
+
     return requires_stage_2
 
 
 def get_updates_from_beacon(use_file_instead="") -> list:
     profiles_needing_stage_2 = []
     if use_file_instead != "":
-        json_data = json.load(open(use_file_instead)).get("results")
+        with open(use_file_instead, "r", encoding="utf-8") as source_file:
+            json_data = json.load(source_file).get("results")
 
         # check if student already in table, if so then do they need to be updated?
         for student in json_data:
@@ -53,20 +51,6 @@ def get_updates_from_beacon(use_file_instead="") -> list:
 
     else:
         PAGE_SIZE = 100
-        try:
-            AUTH_TOKEN = open(settings.bearer_token_path, "r", encoding="utf-8").read()
-        except FileNotFoundError:
-            AUTH_TOKEN = gen_auth_code()
-
-        if AUTH_TOKEN is None:
-            raise Exception("Unable to authenticate to base system")
-
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Authorization": AUTH_TOKEN,
-        }
-
-        # TODO: perform some PING here to confirm auth code is valid
 
         json_data = {
             "statuses": [
@@ -100,22 +84,13 @@ def get_updates_from_beacon(use_file_instead="") -> list:
             "gender": [],
         }
 
-        response = requests.post(
-            f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
-            headers=headers,
-            json=json_data,
+        response = beacon_client.post(
+            "/beacon/Placement/searchwithcount", json=json_data
         )
 
-        if response.status_code >= 400:
-            logger.warning("Bad authorization from Beacon; generating a new token.")
-            AUTH_TOKEN = gen_auth_code()
-            if AUTH_TOKEN is None:
-                raise Exception("Unable to authenticate with beacon")
-            headers["Authorization"] = AUTH_TOKEN
-            response = requests.post(
-                f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
-                headers=headers,
-                json=json_data,
+        if response.status_code >= 400:  # ty:ignore[unsupported-operator]
+            raise RuntimeError(
+                f"Unable to fetch updates from Beacon. status_code={response.status_code}"
             )
 
         r_json = response.json()
@@ -127,23 +102,25 @@ def get_updates_from_beacon(use_file_instead="") -> list:
 
         for page_num in range(2, iterations_needed + 1):
             json_data["page"] = page_num
-            response = requests.post(
-                f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
-                headers=headers,
-                json=json_data,
+            response = beacon_client.post(
+                "/beacon/Placement/searchwithcount", json=json_data
             )
+            if response.status_code >= 400:  # ty:ignore[unsupported-operator]
+                raise RuntimeError(
+                    f"Unable to fetch Beacon page {page_num}. status_code={response.status_code}"
+                )
             data["results"].extend(response.json().get("results", []))
-        
-        for student in data.get("results"):
-            if student['usaHsId'] == "":
+
+        for student in data.get("results"):  # ty:ignore[not-iterable]
+            if student["usaHsId"] == "":
                 continue
             requires_stage_2 = update_simple_student_view(student)
             if requires_stage_2 is True:
                 profiles_needing_stage_2.append(student)
-            
 
     logger.info("Phase 1 update completed")
-    logger.info("Number of profiles needing phase 2 - %s", len(profiles_needing_stage_2))
+    logger.info(
+        "Number of profiles needing phase 2 - %s", len(profiles_needing_stage_2)
+    )
     # update the time so the last update time is visible to users
     return profiles_needing_stage_2
-    

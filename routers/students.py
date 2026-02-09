@@ -1,8 +1,9 @@
 import logging
 
+from repositories.admin import update_time
+from repositories.students import get_all_full_students, get_full_student_by_id
 from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
-from utils.db import get_all_full_students, get_full_student_by_id
 from enum import Enum
 from functools import lru_cache
 
@@ -11,7 +12,6 @@ from pydantic import BaseModel
 
 from models.search_filters import SearchFilters
 from models.student import BasicStudent, FullStudent
-from utils import db
 from utils.search_filters import filter_students
 
 router: APIRouter = APIRouter(prefix="/students", tags=["students"])
@@ -30,7 +30,6 @@ class OrderBy(str, Enum):
 class ItemQueryParams(BaseModel):
     order_by: OrderBy = OrderBy.age
     descending: bool = True
-
 
 
 @router.get(path="/full/{app_id}", response_model=FullStudent)
@@ -86,6 +85,6 @@ def update_student_db() -> dict:
     if len(students_needing_stage_2) != 0:
         run_stage_2_multi_threaded(students_needing_stage_2)
 
-    db.update_time()
+    update_time()
     apply_filters.cache_clear()
     return {"message": "Student refresh completed", "stage_2_processed": processed}

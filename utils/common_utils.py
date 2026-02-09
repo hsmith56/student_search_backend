@@ -1,4 +1,6 @@
 from models.student import FullStudent
+
+
 def _full_student_dict(student: dict) -> FullStudent:
     # helper func to avoid having to retype this entire section each time
     return FullStudent(

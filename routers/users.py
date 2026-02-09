@@ -1,8 +1,8 @@
-from utils.db import get_favorites
 from fastapi import APIRouter, Depends, Query
 from models.student import BasicStudent, FullStudent
+from repositories.students import get_favorites
+from repositories.users import update_user
 from routers.auth import get_current_user
-from utils import db
 import json
 from enum import Enum
 from pydantic import BaseModel
@@ -51,9 +51,7 @@ def get_user_favorites(
             key=lambda x: x.__getattribute__(params.order_by),
             reverse=params.descending,
         )
-        return [
-            BasicStudent(**student.model_dump()) for student in results
-        ]
+        return [BasicStudent(**student.model_dump()) for student in results]
     except Exception:
         return []
 
@@ -67,7 +65,7 @@ def add_favorite(
         favorites = json.loads(current_user["favorites"])
     if pax_id not in favorites:
         favorites.append(pax_id)
-        db.update_user(username=current_user["username"], favorites=favorites)
+        update_user(username=current_user["username"], favorites=favorites)
     return {"message": "Favorite added"}
 
 
@@ -80,5 +78,5 @@ def remove_favorite(
         favorites = json.loads(current_user["favorites"])
     if pax_id in favorites:
         favorites.remove(pax_id)
-        db.update_user(username=current_user["username"], favorites=favorites)
+        update_user(username=current_user["username"], favorites=favorites)
     return {"message": "Favorite removed"}
