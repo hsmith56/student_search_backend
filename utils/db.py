@@ -1,5 +1,7 @@
 from utils.common_utils import _full_student_dict
 from models.student import FullStudent
+from core.config import settings
+import logging
 import sqlite3
 
 import uuid
@@ -9,10 +11,13 @@ import itertools
 from datetime import datetime
 import pytz
 
+DB_PATH = settings.database_path
+logger = logging.getLogger(__name__)
+
 
 # Database setup
 def initialize_db() -> None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -126,7 +131,7 @@ def create_user(username, password, first_name, favorites=None) -> None:
         if isinstance(favorites, list):
             favorites_str = json.dumps(favorites)
 
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     try:
         cursor.execute(
@@ -138,14 +143,14 @@ def create_user(username, password, first_name, favorites=None) -> None:
         )
         connection.commit()
     except sqlite3.IntegrityError:
-        print("Username already exists.")
+        logger.warning("create_user skipped: username already exists")
     finally:
         connection.close()
 
 
 # Read user data
 def read_user(username="", user_id=""):
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
     if username != "":
@@ -171,7 +176,7 @@ def read_user(username="", user_id=""):
 
 # Update user data
 def update_user(username: str, first_name: str = "", favorites=None) -> None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     if first_name != "":
         cursor.execute(
@@ -195,7 +200,7 @@ def update_user(username: str, first_name: str = "", favorites=None) -> None:
 
 # Delete a user
 def delete_user(username) -> None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         """
@@ -216,7 +221,7 @@ def create_feedback(
     if comment_date is None:
         comment_date = datetime.now(pytz.timezone("US/Eastern")).isoformat()
 
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         """
@@ -232,7 +237,7 @@ def create_feedback(
 
 
 def get_feedback(feedback_id: int):
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
     cursor.execute(
@@ -249,7 +254,7 @@ def get_feedback(feedback_id: int):
 
 
 def list_feedback() -> list[dict]:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
     cursor.execute(
@@ -290,7 +295,7 @@ def update_feedback(
     values.append(feedback_id)
     set_clause = ", ".join(updates)
 
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         f"""
@@ -307,7 +312,7 @@ def update_feedback(
 
 
 def delete_feedback(feedback_id: int) -> bool:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         """
@@ -323,7 +328,7 @@ def delete_feedback(feedback_id: int) -> bool:
 
 
 def add_student_basic_overview(student) -> None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     try:
         cursor.execute(
@@ -346,13 +351,13 @@ def add_student_basic_overview(student) -> None:
         )
         connection.commit()
     except sqlite3.IntegrityError:
-        print("student already exists.")
+        logger.warning("add_student_basic_overview skipped: student already exists")
     finally:
         connection.close()
 
 
 def update_student_status_basic_overview(app_id: int, placement_status: str) -> None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         """
@@ -365,7 +370,7 @@ def update_student_status_basic_overview(app_id: int, placement_status: str) -> 
 
 
 def query_full_students(query_param: str, query_val: str):
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -382,7 +387,7 @@ def query_full_students(query_param: str, query_val: str):
 
 
 def does_student_exist_basic_overview(student_app_id) -> tuple[int | None, str]:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
 
     cursor.execute(
@@ -401,7 +406,7 @@ def does_student_exist_basic_overview(student_app_id) -> tuple[int | None, str]:
 
 
 def get_countries() -> list[str]:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -417,7 +422,7 @@ def get_countries() -> list[str]:
 
 
 def read_students():
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -431,7 +436,7 @@ def read_students():
 
 # Delete a student
 def delete_student(app_id):
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute(
         """
@@ -444,7 +449,7 @@ def delete_student(app_id):
 
 
 def get_hashed_auth() -> str:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute("""SELECT auth_code FROM admin;""")
     auth_code = cursor.fetchone()
@@ -453,7 +458,7 @@ def get_hashed_auth() -> str:
 
 
 def update_time():
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute("SELECT COUNT(*) FROM admin")
 
@@ -476,7 +481,7 @@ def update_time():
 
 def get_last_update_time() -> str:
     connection = sqlite3.connect(
-        "user_auth.db", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
     )
     cursor = connection.cursor()
     cursor.execute("SELECT last_refresh_date FROM admin")
@@ -569,7 +574,7 @@ def insert_full_student(student):
     )
 
     connection = sqlite3.connect(
-        "user_auth.db", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
     )
     cursor = connection.cursor()
     cursor.execute(sql, values)
@@ -621,7 +626,7 @@ def row_to_student(row: sqlite3.Row) -> FullStudent:
 
 
 def get_all_full_students() -> list[FullStudent]:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -632,7 +637,7 @@ def get_all_full_students() -> list[FullStudent]:
 
 
 def get_full_student_by_id(student_app_id) -> FullStudent | None:
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
 
@@ -651,7 +656,7 @@ def get_favorites(favorites_list: list[int]) -> list[FullStudent]:
         return []
 
     favorites_list = [int(x) for x in favorites_list]
-    connection = sqlite3.connect("user_auth.db")
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     cursor = connection.cursor()
     placeholders = ",".join("?" for _ in favorites_list)
@@ -661,10 +666,6 @@ def get_favorites(favorites_list: list[int]) -> list[FullStudent]:
     connection.close()
 
     return list_of_all_students
-
-
-initialize_db()
-
 
 # add_student("harrison",1432, pax_id=123, country="United States", program_type="10 month jan", adjusted_age=15, placement_status="accepted")
 # delete_student(1432)
@@ -709,3 +710,4 @@ initialize_db()
 #     local_coordinator TEXT DEFAULT ""
 # )
 # ''')
+

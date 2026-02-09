@@ -1,6 +1,10 @@
+import logging
+
 from models.search_filters import SearchFilters
 from models.student import FullStudent
 from rapidfuzz import fuzz, utils
+
+logger = logging.getLogger(__name__)
 
 
 def filter_students(
@@ -24,21 +28,22 @@ def filter_students(
         elif filters.gender_male is True:
             res = [s for s in res if s.gender_desc.lower() == "male"]
 
-        print(f"\t1. {len(res)}")
+        logger.debug("Filter step 1 count=%s", len(res))
 
     if filters.state and filters.state != "all":
         res = [
             s for s in res if filters.state.lower() in [st.lower() for st in s.states]
         ]
-        print(f"\t2. {len(res)}")
+        logger.debug("Filter step 2 count=%s", len(res))
 
     if filters.interests:
         if filters.interests.lower() == "all":
             pass
         else:
-            print(res[0].selected_interests)
+            if len(res) > 0:
+                logger.debug("Selected interests sample=%s", res[0].selected_interests)
             res = [s for s in res if filters.interests in s.selected_interests]
-            print(f"\t3. {len(res)}")
+            logger.debug("Filter step 3 count=%s", len(res))
 
     if filters.gpa and filters.gpa != "all":
         try:
@@ -46,7 +51,7 @@ def filter_students(
             res = [s for s in res if s.gpa and float(s.gpa) >= gpa_value]
         except ValueError:
             pass
-        print(f"\t4. {len(res)}")
+        logger.debug("Filter step 4 count=%s", len(res))
 
     if filters.pets_in_home is not None and isinstance(filters.pets_in_home, str):
         if filters.pets_in_home != "all":
@@ -54,15 +59,15 @@ def filter_students(
             res = [
                 s for s in res if s.live_with_pets is mapping.get(filters.pets_in_home)
             ]
-            print(f"\t5. {len(res)}")
+            logger.debug("Filter step 5 count=%s", len(res))
 
     if filters.usahsId:
         res = [s for s in res if filters.usahsId.lower() in s.usahsid.lower()]
-        print(f"\t6. {len(res)}")
+        logger.debug("Filter step 6 count=%s", len(res))
 
     if filters.country_of_origin and filters.country_of_origin != "all":
         res = [s for s in res if s.country.lower() == filters.country_of_origin.lower()]
-        print(f"\t7. {len(res)}")
+        logger.debug("Filter step 7 count=%s", len(res))
 
     if filters.adjusted_age and filters.adjusted_age != "all":
         try:
@@ -70,21 +75,21 @@ def filter_students(
             res = [s for s in res if s.adjusted_age and s.adjusted_age >= age_value]
         except ValueError:
             pass  # Ignore invalid age filter
-        print(f"\t8. {len(res)}")
+        logger.debug("Filter step 8 count=%s", len(res))
 
     if filters.single_placement is not None and filters.single_placement != "all":
         if filters.single_placement.lower() == "yes":
             res = [s for s in res if s.single_placement is True]
         elif filters.single_placement.lower() == "no":
             res = [s for s in res if s.single_placement is True]
-        print(f"\t9. {len(res)}")
+        logger.debug("Filter step 9 count=%s", len(res))
 
     if filters.double_placement is not None and filters.double_placement != "all":
         if filters.double_placement.lower() == "yes":
             res = [s for s in res if s.double_placement is True]
         elif filters.double_placement.lower() == "no":
             res = [s for s in res if s.double_placement is False]
-        print(f"\t10. {len(res)}")
+        logger.debug("Filter step 10 count=%s", len(res))
 
     if filters.program_types is not None and isinstance(filters.program_types, tuple):
         if len(filters.program_types) == 0:
@@ -98,19 +103,19 @@ def filter_students(
             }
             p_types = [mapping[x] for x in filters.program_types]
             res = [s for s in res if any([x in s.program_type for x in p_types])]
-            print(f"\t11. {len(res)}")
+            logger.debug("Filter step 11 count=%s", len(res))
 
     if filters.early_placement is not None and filters.early_placement != "all":
         if filters.early_placement.lower() == "yes":
             res = [s for s in res if "EP" in s.usahsid.upper()]
         else:
             res = [s for s in res if "EP" not in s.usahsid.upper()]
-        print(f"\t12. {len(res)}")
+        logger.debug("Filter step 12 count=%s", len(res))
 
     # TODO: Confirm if this worked
     if filters.hasVideo is not None and filters.hasVideo is True:
         res = [s for s in res if s.media_link != ""]
-        print(f"\t13. {len(res)}")
+        logger.debug("Filter step 13 count=%s", len(res))
 
     if filters.religiousPractice is not None and filters.religiousPractice != "all":
         mapping = {
@@ -123,7 +128,7 @@ def filter_students(
             for s in res
             if s.religious_frequency == mapping[filters.religiousPractice]
         ]
-        print(f"\t14. {len(res)}")
+        logger.debug("Filter step 14 count=%s", len(res))
 
     if filters.grants_options is not None and len(filters.grants_options) != 0:
         if "grant" in filters.grants_options:
@@ -138,7 +143,7 @@ def filter_students(
                 for student in res
                 if student.usahsid.lower()[0:3] in filters.grants_options
             ]
-        print(f"\t15. {len(res)}")
+        logger.debug("Filter step 15 count=%s", len(res))
 
     # TODO: Switch to embeddings
     if filters.photo_search is not None and filters.photo_search != "":
@@ -150,7 +155,7 @@ def filter_students(
             )
             >= 86
         ]
-        print(f"\t16. {len(res)}")
+        logger.debug("Filter step 16 count=%s", len(res))
 
     if filters.free_text is not None and filters.free_text != "":
         x: list[FullStudent] = []
@@ -264,7 +269,7 @@ def filter_students(
                 continue
 
         res = [w for w in x]
-        print(f"\t17. {len(res)}")
+        logger.debug("Filter step 17 count=%s", len(res))
         # TODO: Stop after 21 results, then continue to do the analysis in the background
         # TODO: Preprocess everything beforehand so that any string is ever processed once.
     return res

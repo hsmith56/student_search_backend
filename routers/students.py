@@ -1,10 +1,10 @@
-from utils.beacon_refresh_stage2 import fill_out_student, run_stage_2_multi_threaded
+import logging
+
+from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
 from utils.db import get_all_full_students, get_full_student_by_id
-import json
 from enum import Enum
 from functools import lru_cache
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from utils import db
 from utils.search_filters import filter_students
 
 router: APIRouter = APIRouter(prefix="/students", tags=["students"])
+logger = logging.getLogger(__name__)
 
 
 class OrderBy(str, Enum):
@@ -52,7 +53,7 @@ def search(
     page_size: int = Query(default=21, ge=1, le=100),
     params: ItemQueryParams = Depends(),
 ):
-    print(filters)
+    logger.debug("student search filters=%s", filters.model_dump())
 
     results: list[FullStudent] = apply_filters(filters)  # pyright: ignore[reportRedeclaration, reportAssignmentType]
 
@@ -78,16 +79,13 @@ def search(
     }
 
 
-@router.get(path="/update_db")
-def update_student_db() -> None:
+@router.post(path="/update_db")
+def update_student_db() -> dict:
     students_needing_stage_2 = get_updates_from_beacon()
+    processed = len(students_needing_stage_2)
     if len(students_needing_stage_2) != 0:
         run_stage_2_multi_threaded(students_needing_stage_2)
-        # for student in students_needing_stage_2:
-        #     fill_out_student(student)
-    
+
     db.update_time()
     apply_filters.cache_clear()
-
-
-db.update_time()
+    return {"message": "Student refresh completed", "stage_2_processed": processed}

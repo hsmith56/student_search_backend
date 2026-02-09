@@ -1,9 +1,8 @@
-import os
-
 import requests
-from dotenv import load_dotenv
+import logging
+from core.config import settings
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 def gen_auth_code():
@@ -12,8 +11,8 @@ def gen_auth_code():
         "Content-Type": "application/x-www-form-urlencoded",
     }
 
-    username: str = os.getenv("beacon_username", "")
-    password: str = os.getenv("beacon_password", "")
+    username: str = settings.beacon_username
+    password: str = settings.beacon_password
     if username == "" or password == "":
         raise ValueError("Beacon Username/Password missing from environment")
 
@@ -22,23 +21,25 @@ def gen_auth_code():
         "password": password,
         "grant_type": "password",
         "scope": "offline_access",
-        "resource": "https://api.ciee.org/beacon/",
+        "resource": f"{settings.beacon_base_url}/beacon/",
     }
 
     response = requests.post(
-        "https://api.ciee.org/beacon/authorization/token", data=data, headers=headers
+        f"{settings.beacon_base_url}/beacon/authorization/token",
+        data=data,
+        headers=headers,
     )
 
     # Auth code generated successfully
     if response.status_code < 400:
         pass
     else:
-        print("Failure generating auth code, exiting.")
+        logger.error("Failure generating auth code, exiting.")
         return None
 
     access_token: str = "Bearer " + response.json()["access_token"]
 
-    with open("bearer_token", "w") as f:
+    with open(settings.bearer_token_path, "w", encoding="utf-8") as f:
         f.write(access_token)
 
     return access_token

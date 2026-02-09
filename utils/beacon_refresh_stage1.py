@@ -1,14 +1,18 @@
 import json
 import math
+import logging
 
 import requests
 
+from core.config import settings
 from utils.beacon_auth import gen_auth_code
 from utils.db import (
     does_student_exist_basic_overview,
     update_student_status_basic_overview,
     add_student_basic_overview,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def update_simple_student_view(student) -> bool:
@@ -50,7 +54,7 @@ def get_updates_from_beacon(use_file_instead="") -> list:
     else:
         PAGE_SIZE = 100
         try:
-            AUTH_TOKEN = open("bearer_token", "r").read()
+            AUTH_TOKEN = open(settings.bearer_token_path, "r", encoding="utf-8").read()
         except FileNotFoundError:
             AUTH_TOKEN = gen_auth_code()
 
@@ -97,19 +101,19 @@ def get_updates_from_beacon(use_file_instead="") -> list:
         }
 
         response = requests.post(
-            "https://api.ciee.org/beacon/Placement/searchwithcount",
+            f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
             headers=headers,
             json=json_data,
         )
 
         if response.status_code >= 400:
-            print("Bad authorization, generating new token.")
+            logger.warning("Bad authorization from Beacon; generating a new token.")
             AUTH_TOKEN = gen_auth_code()
             if AUTH_TOKEN is None:
                 raise Exception("Unable to authenticate with beacon")
             headers["Authorization"] = AUTH_TOKEN
             response = requests.post(
-                "https://api.ciee.org/beacon/Placement/searchwithcount",
+                f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
                 headers=headers,
                 json=json_data,
             )
@@ -124,7 +128,7 @@ def get_updates_from_beacon(use_file_instead="") -> list:
         for page_num in range(2, iterations_needed + 1):
             json_data["page"] = page_num
             response = requests.post(
-                "https://api.ciee.org/beacon/Placement/searchwithcount",
+                f"{settings.beacon_base_url}/beacon/Placement/searchwithcount",
                 headers=headers,
                 json=json_data,
             )
@@ -138,8 +142,8 @@ def get_updates_from_beacon(use_file_instead="") -> list:
                 profiles_needing_stage_2.append(student)
             
 
-    print("Phase 1 update completed")
-    print(f"Number of profiles needing phase 2 - {len(profiles_needing_stage_2)}")
+    logger.info("Phase 1 update completed")
+    logger.info("Number of profiles needing phase 2 - %s", len(profiles_needing_stage_2))
     # update the time so the last update time is visible to users
     return profiles_needing_stage_2
     
