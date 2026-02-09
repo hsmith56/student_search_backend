@@ -41,4 +41,8 @@ def setup_logging() -> None:
         stream_handler.setFormatter(formatter)
         root_logger.addHandler(stream_handler)
 
+    # Suppress noisy dev file-watcher INFO lines like:
+    # "watchfiles.main | X changes detected"
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+
     _LOGGING_CONFIGURED = True

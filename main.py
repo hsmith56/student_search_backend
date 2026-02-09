@@ -4,8 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from core.logging_config import setup_logging
-from repositories.admin import initialize_db, update_time
-from routers import misc, students, auth, users, feedback  # embeddings
+from repositories.admin import initialize_db
+from routers import misc, students, auth, users, feedback 
 
 setup_logging()
 
@@ -29,4 +29,4 @@ app.include_router(feedback.router, dependencies=[Depends(get_current_user)])
 @app.on_event("startup")
 def startup_init() -> None:
     initialize_db()
-    update_time()
+    

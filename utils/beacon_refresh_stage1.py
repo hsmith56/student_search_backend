@@ -6,7 +6,7 @@ from integrations.beacon_client import beacon_client
 from repositories.students import (
     add_student_basic_overview,
     does_student_exist_basic_overview,
-    update_student_status_basic_overview,
+    update_student_status_basic_overview, update_student_status_full,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ def update_simple_student_view(student) -> bool:
     )
     if student_id is not None:
         # if student exists, confirm if the status is the same
+
         if student.get("placementStatusName") != status_in_db:
             # if status was unassigned but now is allocated, need to perform update just to ensure values did not change
             if status_in_db.lower() == "unassigned":
@@ -26,8 +27,12 @@ def update_simple_student_view(student) -> bool:
             update_student_status_basic_overview(
                 app_id=student_id, placement_status=student.get("placementStatusName")
             )
+            update_student_status_full(app_id=student_id, placement_status=student.get("placementStatusName"), usahs_id=student.get("usaHsId"))
         else:
             # status has not changed, no need to do anything additonal
+            # update_student_status_basic_overview(
+            #     app_id=student_id, placement_status=student.get("placementStatusName")
+            # )
             pass
     else:
         # student does not exist, need to add student to the database
