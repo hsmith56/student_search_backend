@@ -15,6 +15,7 @@ data/
 *.db
 test.py
 logs/
+log/
 temp/
 
 .env
