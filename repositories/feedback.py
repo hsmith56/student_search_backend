@@ -45,16 +45,27 @@ def get_feedback(feedback_id: int):
     return dict(feedback) if feedback else None
 
 
-def list_feedback() -> list[dict]:
+def list_feedback(username: str | None = None) -> list[dict]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
-    cursor.execute(
+    if username is None:
+        cursor.execute(
+            """
+        SELECT id, username, first_name, comment, comment_date
+        FROM feedback
+        ORDER BY id DESC
         """
-    SELECT id, username, first_name, comment, comment_date
-    FROM feedback
-    ORDER BY id DESC
-    """
-    )
+        )
+    else:
+        cursor.execute(
+            """
+        SELECT id, username, first_name, comment, comment_date
+        FROM feedback
+        WHERE username = ?
+        ORDER BY id DESC
+        """,
+            (username,),
+        )
     feedback_rows = cursor.fetchall()
     connection.close()
     return [dict(row) for row in feedback_rows]

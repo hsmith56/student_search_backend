@@ -47,8 +47,11 @@ def create_feedback(
 
 
 @router.get(path="/", response_model=list[FeedbackItem])
-def get_feedback_items() -> list[FeedbackItem]:
-    return [FeedbackItem(**item) for item in list_feedback()]
+def get_feedback_items(current_user=Depends(get_current_user)) -> list[FeedbackItem]:
+    return [
+        FeedbackItem(**item)
+        for item in list_feedback(username=current_user["username"])
+    ]
 
 
 @router.get(path="/{feedback_id}", response_model=FeedbackItem)
