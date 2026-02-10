@@ -21,3 +21,6 @@ temp/
 .env
 bearer_token
 embeddings.py
+
+*.crt
+*.key
