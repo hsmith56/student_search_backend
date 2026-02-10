@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Delete all rows from the news feed table (student_placement_events)."
+        description=(
+            "Delete all rows from student_placement_events and reset event_id sequence."
+        )
     )
     args = parser.parse_args()
     del args
@@ -24,7 +26,10 @@ def main() -> None:
     setup_logging()
     initialize_db()
     deleted_count = clear_student_placement_events()
-    logger.info("Cleared news feed table. deleted_events=%s", deleted_count)
+    logger.info(
+        "Cleared news feed table and reset event_id sequence. deleted_events=%s",
+        deleted_count,
+    )
 
 
 if __name__ == "__main__":

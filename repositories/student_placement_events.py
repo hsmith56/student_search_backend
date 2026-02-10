@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime
 
 import pytz
@@ -100,6 +101,14 @@ def clear_student_placement_events() -> int:
     existing_count = cursor.fetchone()
     rows_to_delete = int(existing_count[0]) if existing_count is not None else 0
     cursor.execute("DELETE FROM student_placement_events")
+    try:
+        cursor.execute(
+            "DELETE FROM sqlite_sequence WHERE name = ?",
+            ("student_placement_events",),
+        )
+    except sqlite3.OperationalError:
+        # sqlite_sequence may not exist yet if AUTOINCREMENT has never been used.
+        pass
     connection.commit()
     connection.close()
     return rows_to_delete

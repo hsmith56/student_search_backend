@@ -5,7 +5,7 @@
 - `uv run fastapi run`
 - `uv run scripts/refresh_students.py` (manual refresh script)
 - `uv run scripts/switch_allocated_to_unassigned.py --count 5` allows for easy swapping of students from allocated to unassigned for testing
-- `uv run scripts/clear_news_feed.py` clears all feed events
+- `uv run scripts/clear_news_feed.py` clears all feed events and resets the event ID sequence
 - `uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice` inserts a feed event (`Unassigned -> Allocated`) that will be broadcast if websocket notifier is running
 
 ## Local TLS Certificate (Linux/macOS)
