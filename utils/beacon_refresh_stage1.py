@@ -149,11 +149,11 @@ def _apply_write_plans(write_plans: list[StudentWritePlan]) -> None:
                 continue
             update_student_status_basic_overview(
                 app_id=plan.app_id,
-                placement_status=plan.placement_status,
+                placement_status=plan.placement_status,  # ty:ignore[invalid-argument-type]
             )
             update_student_status_full(
                 app_id=plan.app_id,
-                placement_status=plan.placement_status,
+                placement_status=plan.placement_status,  # ty:ignore[invalid-argument-type]
                 usahs_id=plan.usahs_id,
             )
 
