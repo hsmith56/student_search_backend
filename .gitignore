@@ -24,3 +24,4 @@ embeddings.py
 
 *.crt
 *.key
+placement_data.json

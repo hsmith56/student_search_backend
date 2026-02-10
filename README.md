@@ -7,6 +7,34 @@
 - `uv run scripts/switch_allocated_to_unassigned.py --count 5` allows for easy swapping of students from allocated to unassigned for testing
 - `uv run scripts/clear_news_feed.py` clears all feed events and resets the event ID sequence
 - `uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice` inserts a feed event (`Unassigned -> Allocated`) that will be broadcast if websocket notifier is running
+- `uv run python scripts/export_placement_data.py` exports Beacon host placement payloads for placed students to `placement_data.json`
+- `uv run python scripts/import_placement_metrics.py` imports `placement_data.json` into `placement_metrics` (skips rows missing `placementDate`)
+
+## Placement Metrics Scripts
+
+Use these scripts together for placement metrics debugging:
+
+1. Export placement data from Beacon for placed students:
+```powershell
+uv run python scripts/export_placement_data.py
+```
+This reads placed students from `student_full_view` and writes Beacon host information responses to `placement_data.json` at the repo root.
+
+2. Import placement metrics into SQLite:
+```powershell
+uv run python scripts/import_placement_metrics.py
+```
+This upserts into `placement_metrics` using:
+- `app_id` (primary key)
+- `city`
+- `state`
+- `placementDate` (required; records missing this are skipped)
+- `hostFamilyName`
+
+Optional: import from a custom JSON path:
+```powershell
+uv run python scripts/import_placement_metrics.py .\path\to\placement_data.json
+```
 
 ## Local TLS Certificate (Linux/macOS)
 From `Backend/`, generate the local cert/key in the project root (`Student_Search/`):

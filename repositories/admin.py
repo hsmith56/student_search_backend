@@ -124,6 +124,18 @@ def initialize_db() -> None:
 
     cursor.execute(
         """
+    CREATE TABLE IF NOT EXISTS placement_metrics(
+        app_id INTEGER PRIMARY KEY,
+        city TEXT,
+        state TEXT,
+        placementDate TEXT NOT NULL,
+        hostFamilyName TEXT
+    );
+    """
+    )
+
+    cursor.execute(
+        """
     CREATE INDEX IF NOT EXISTS idx_student_placement_events_student_time
     ON student_placement_events(student_id, event_at DESC);
     """
