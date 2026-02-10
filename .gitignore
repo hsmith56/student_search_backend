@@ -10,7 +10,7 @@ wheels/
 .venv
 *.pt
 .ruff_cache/
-data/
+
 
 *.db
 test.py
@@ -20,5 +20,4 @@ temp/
 
 .env
 bearer_token
-*.json
 embeddings.py

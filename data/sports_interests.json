@@ -1,0 +1,315 @@
+[
+  {
+    "id": 41,
+    "description": "Acting (Drama/Theater)"
+  },
+  {
+    "id": 78,
+    "description": "Aerobics"
+  },
+  {
+    "id": 42,
+    "description": "Astronomy"
+  },
+  {
+    "id": 43,
+    "description": "Auto Mechanics"
+  },
+  {
+    "id": 1,
+    "description": "Badminton"
+  },
+  {
+    "id": 2,
+    "description": "Baseball - playing"
+  },
+  {
+    "id": 3,
+    "description": "Baseball - watching"
+  },
+  {
+    "id": 4,
+    "description": "Basketball - playing"
+  },
+  {
+    "id": 5,
+    "description": "Basketball - watching"
+  },
+  {
+    "id": 6,
+    "description": "Bicycling"
+  },
+  {
+    "id": 7,
+    "description": "Bowling"
+  },
+  {
+    "id": 8,
+    "description": "Boxing"
+  },
+  {
+    "id": 46,
+    "description": "Camping"
+  },
+  {
+    "id": 47,
+    "description": "Ceramics/Pottery"
+  },
+  {
+    "id": 10,
+    "description": "Chearleading"
+  },
+  {
+    "id": 48,
+    "description": "Chess"
+  },
+  {
+    "id": 49,
+    "description": "Computers"
+  },
+  {
+    "id": 50,
+    "description": "Concerts"
+  },
+  {
+    "id": 51,
+    "description": "Cooking"
+  },
+  {
+    "id": 52,
+    "description": "Crafts"
+  },
+  {
+    "id": 11,
+    "description": "Cricket"
+  },
+  {
+    "id": 53,
+    "description": "Current Events/Politics"
+  },
+  {
+    "id": 44,
+    "description": "Dance - Ballet"
+  },
+  {
+    "id": 45,
+    "description": "Dance - Ballroom"
+  },
+  {
+    "id": 61,
+    "description": "Dance - Modern/Jazz"
+  },
+  {
+    "id": 12,
+    "description": "Field Hockey - playing"
+  },
+  {
+    "id": 13,
+    "description": "Field Hockey - watching"
+  },
+  {
+    "id": 54,
+    "description": "Fishing"
+  },
+  {
+    "id": 14,
+    "description": "Football (Soccer) - playing"
+  },
+  {
+    "id": 15,
+    "description": "Football (Soccer) - watching"
+  },
+  {
+    "id": 55,
+    "description": "Gardening"
+  },
+  {
+    "id": 16,
+    "description": "Golf"
+  },
+  {
+    "id": 17,
+    "description": "Gymnastics"
+  },
+  {
+    "id": 18,
+    "description": "Handball"
+  },
+  {
+    "id": 19,
+    "description": "Hiking"
+  },
+  {
+    "id": 20,
+    "description": "Hockey"
+  },
+  {
+    "id": 21,
+    "description": "Horseback Riding"
+  },
+  {
+    "id": 56,
+    "description": "Hunting"
+  },
+  {
+    "id": 22,
+    "description": "Ice-Skating"
+  },
+  {
+    "id": 57,
+    "description": "Interior Design"
+  },
+  {
+    "id": 58,
+    "description": "Knitting/Sewing"
+  },
+  {
+    "id": 23,
+    "description": "Lacrosse"
+  },
+  {
+    "id": 59,
+    "description": "Listening to Classical Music"
+  },
+  {
+    "id": 60,
+    "description": "Listening to Pop Music"
+  },
+  {
+    "id": 24,
+    "description": "Martial Arts"
+  },
+  {
+    "id": 62,
+    "description": "Movies"
+  },
+  {
+    "id": 63,
+    "description": "Museums"
+  },
+  {
+    "id": 77,
+    "description": "Other"
+  },
+  {
+    "id": 25,
+    "description": "Paddle Tennis"
+  },
+  {
+    "id": 64,
+    "description": "Painting/Drawing"
+  },
+  {
+    "id": 65,
+    "description": "Photography"
+  },
+  {
+    "id": 66,
+    "description": "Playing Cards"
+  },
+  {
+    "id": 67,
+    "description": "Playing Musical Instrument(s)"
+  },
+  {
+    "id": 68,
+    "description": "Reading"
+  },
+  {
+    "id": 69,
+    "description": "Religious Activity"
+  },
+  {
+    "id": 26,
+    "description": "Rock Climbing"
+  },
+  {
+    "id": 27,
+    "description": "Roller Skating/Roller Blading"
+  },
+  {
+    "id": 28,
+    "description": "Running/Jogging"
+  },
+  {
+    "id": 9,
+    "description": "Sailing"
+  },
+  {
+    "id": 70,
+    "description": "Scuba Diving"
+  },
+  {
+    "id": 71,
+    "description": "Singing (in choir)"
+  },
+  {
+    "id": 29,
+    "description": "Skateboarding"
+  },
+  {
+    "id": 30,
+    "description": "Skiing"
+  },
+  {
+    "id": 31,
+    "description": "Snowboarding"
+  },
+  {
+    "id": 72,
+    "description": "Stamp Collecting"
+  },
+  {
+    "id": 32,
+    "description": "Swimming"
+  },
+  {
+    "id": 33,
+    "description": "Table Tennis"
+  },
+  {
+    "id": 73,
+    "description": "Television"
+  },
+  {
+    "id": 34,
+    "description": "Tennis"
+  },
+  {
+    "id": 35,
+    "description": "Track and Field"
+  },
+  {
+    "id": 74,
+    "description": "Travel"
+  },
+  {
+    "id": 36,
+    "description": "US Football - playing"
+  },
+  {
+    "id": 37,
+    "description": "US Football - watching"
+  },
+  {
+    "id": 75,
+    "description": "Video Games"
+  },
+  {
+    "id": 38,
+    "description": "Volleyball"
+  },
+  {
+    "id": 39,
+    "description": "Weightlifting"
+  },
+  {
+    "id": 40,
+    "description": "Wrestling"
+  },
+  {
+    "id": 76,
+    "description": "Writing"
+  }
+]
+
