@@ -8,6 +8,20 @@
 - `uv run scripts/clear_news_feed.py` clears all feed events
 - `uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice` inserts a feed event (`Unassigned -> Allocated`) that will be broadcast if websocket notifier is running
 
+## Local TLS Certificate (Linux/macOS)
+From `Backend/`, generate the local cert/key in the project root (`Student_Search/`):
+
+```bash
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -keyout ../localhost.key \
+  -out ../localhost.crt \
+  -days 365 \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+Then update `nginx_unix.conf` certificate paths to match your Unix absolute path if needed.
+
 ## .env Configuration
 The app now reads centralized settings from `.env` via `core/config.py`.
 
