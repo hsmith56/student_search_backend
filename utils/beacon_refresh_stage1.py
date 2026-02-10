@@ -182,20 +182,21 @@ def get_updates_from_beacon(use_file_instead="") -> list:
             search_payload = {
                 "statuses": [
                     1,  # Allocated
+                    3,  # On hold
                     4,  # Placement Pending
                     5,  # Placement - Review Needed
                     6,  # Placed
                     7,  # Placed - Accepted
                     8,  # Placed - Closed
                     10,  # Placed - Updated
-                    18,  # unassigned
+                    18,  # Unassigned
                 ],
                 "states": [],
                 "products": [
-                    223,  # 2025 aug 5  month
-                    224,  # 2025 aug 10 month
-                    225,  # 2025 jan 10 month
-                    226,  # 2025 jan 5  month
+                    223,  # 2026 aug 5  month
+                    224,  # 2026 aug 10 month
+                    # 225,  # 2026 jan 10 month
+                    # 226,  # 2026 jan 5  month
                 ],
                 "orderBy": "ModifiedOn",
                 "andBy": "",
@@ -203,7 +204,7 @@ def get_updates_from_beacon(use_file_instead="") -> list:
                 "rds": [],
                 "showDeleted": False,
                 "localCoordinators": [],
-                # "availableForPlacement": True,
+                "currentOnly": True,
                 "year": [],
                 "agent": [],
                 "pageSize": PAGE_SIZE,
