@@ -24,8 +24,8 @@ sports_interests_mappings = {
     x["id"]: x["description"] for x in sports_interests_mappings
 }
 
-state_mappings = json.load(open(state_mapping_json_p, "r"))
-state_mappings = {x["id"]: x["name"] for x in state_mappings}
+state_mappings_orig = json.load(open(state_mapping_json_p, "r"))
+state_mappings = {x["id"]: x["name"] for x in state_mappings_orig}
 
 BASE_URL = settings.beacon_base_url
 THREADS = settings.beacon_threads
@@ -197,13 +197,23 @@ def get_placement_requests(field_id):
     # {"id":19,"type":"florida","name":"No","sequence":2,"code":"hsjFloridaStateRequest"}]
     region = r_json.get("regionPlacementId")
     # [{"id":1,"displayName":"Region 1 – Northeast","systemName":"region1_ne","sequence":1},
+    # {"id":9,"displayName":"Northeast","systemName":"region_ne_prex","sequence":1},
+    # {"id":10,"displayName":"Mid-Atlantic","systemName":"region_ma_prex","sequence":2},
     # {"id":6,"displayName":"Region 2 – Mid-Atlantic","systemName":"region2_ma","sequence":2},
+    # {"id":11,"displayName":"Southeast","systemName":"region_se_prex","sequence":3},
     # {"id":2,"displayName":"Region 3 – Southeast","systemName":"region3_se","sequence":3},
+    # {"id":12,"displayName":"Central","systemName":"region_c_prex","sequence":4},
     # {"id":7,"displayName":"Region 4 – Warm South","systemName":"region4_ws","sequence":4},
+    # {"id":13,"displayName":"Northwest","systemName":"region_nw_prex","sequence":5},
     # {"id":5,"displayName":"Region 5 – Great Lakes","systemName":"region5_gl","sequence":5},
     # {"id":4,"displayName":"Region 6 – Midwest","systemName":"region6_mw","sequence":6},
+    # {"id":14,"displayName":"Southwest","systemName":"region_sw_prex","sequence":6},
     # {"id":8,"displayName":"Region 7 – Mountain West","systemName":"region7_mw","sequence":7},
     # {"id":3,"displayName":"Region 8 – Southwest","systemName":"region8_sw","sequence":8}]
+    if region is not None:
+        for state in state_mappings_orig:
+            if state.get("regionId") == region:
+                states.append(state['name'])
     if california != 14 and california:
         states.append("California")
     if florida != 19 and florida:

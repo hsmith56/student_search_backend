@@ -21,6 +21,8 @@ def initialize_db() -> None:
     """
     )
 
+
+
     cursor.execute(
         """
     CREATE TABLE IF NOT EXISTS student_basic_overview( 
