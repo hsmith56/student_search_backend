@@ -1,9 +1,12 @@
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from requests.adapters import HTTPAdapter
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -17,6 +20,15 @@ from repositories.base import get_connection
 logger = logging.getLogger(__name__)
 
 OUTPUT_PATH = ROOT_DIR / "placement_data.json"
+HTTP_REQUEST_WORKERS = 16
+
+
+def _configure_beacon_client_pool() -> None:
+    adapter = HTTPAdapter(
+        pool_connections=HTTP_REQUEST_WORKERS, pool_maxsize=HTTP_REQUEST_WORKERS
+    )
+    beacon_client.session.mount("https://", adapter)
+    beacon_client.session.mount("http://", adapter)
 
 
 def get_placed_students() -> list[dict[str, int]]:
@@ -58,6 +70,48 @@ def _sanitize_payload(payload: Any) -> Any:
     return payload
 
 
+def _get_family_city_state(
+    host_family_id: Any, student_id: int, app_id: int
+) -> tuple[str, str]:
+    if _is_blank(host_family_id):
+        return "", ""
+
+    response = beacon_client.post(
+        "/beacon/LookupList/getfamily", json={"hostFamilyId": host_family_id}
+    )
+    if response.status_code >= 400:  # ty:ignore[unsupported-operator]
+        logger.warning(
+            "Family lookup failed for id=%s app_id=%s hostFamilyId=%s status_code=%s",
+            student_id,
+            app_id,
+            host_family_id,
+            response.status_code,
+        )
+        return "", ""
+
+    try:
+        family_payload = response.json()
+    except ValueError:
+        logger.warning(
+            "Family lookup response was not JSON for id=%s app_id=%s hostFamilyId=%s",
+            student_id,
+            app_id,
+            host_family_id,
+        )
+        return "", ""
+
+    if not isinstance(family_payload, dict):
+        return "", ""
+
+    city = family_payload.get("city")
+    state = family_payload.get("state")
+    if not isinstance(city, str):
+        city = ""
+    if not isinstance(state, str):
+        state = ""
+    return city, state
+
+
 def _apply_placement_fallback(
     host_payload: Any, student_id: int, app_id: int
 ) -> tuple[Any, bool]:
@@ -84,7 +138,8 @@ def _apply_placement_fallback(
     if not isinstance(placement_payload, dict):
         return host_payload, False
 
-    pending_date = placement_payload.get("pendingPlacementResolutionDate")
+    pending_date = placement_payload.get("lastStatusChangeDate")
+    host_family_id = placement_payload.get("hostFamilyId")
 
     if _is_blank(pending_date):
         return host_payload, False
@@ -92,9 +147,14 @@ def _apply_placement_fallback(
     if not isinstance(host_payload, dict):
         host_payload = {}
 
+    city, state = _get_family_city_state(
+        host_family_id=host_family_id,
+        student_id=student_id,
+        app_id=app_id,
+    )
     host_payload["placementDate"] = pending_date
-    host_payload["city"] = ""
-    host_payload["state"] = ""
+    host_payload["city"] = city
+    host_payload["state"] = state
     return host_payload, True
 
 
@@ -133,17 +193,20 @@ def fetch_host_information(student_id: int, app_id: int) -> dict[str, Any]:
     return result
 
 
+def _fetch_student_payload(student: dict[str, int]) -> dict[str, Any]:
+    return fetch_host_information(student["id"], student["app_id"])
+
+
 def main() -> None:
     setup_logging()
     initialize_db()
+    _configure_beacon_client_pool()
 
     placed_students = get_placed_students()
     logger.info("Found %s placed students in student_full_view", len(placed_students))
 
-    results = [
-        fetch_host_information(student["id"], student["app_id"])
-        for student in placed_students
-    ]
+    with ThreadPoolExecutor(max_workers=HTTP_REQUEST_WORKERS) as pool:
+        results = list(pool.map(_fetch_student_payload, placed_students))
     fallback_count = sum(
         1 for result in results if result["placement_fallback_used"] is True
     )

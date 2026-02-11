@@ -134,31 +134,31 @@ def initialize_db() -> None:
     )
 
     cursor.execute("PRAGMA table_info(placement_metrics)")
-    placement_metrics_columns = [row[1] for row in cursor.fetchall()]
-    if "hostFamilyName" in placement_metrics_columns:
-        cursor.execute("DROP TABLE IF EXISTS placement_metrics_migrated")
-        cursor.execute(
-            """
-        CREATE TABLE placement_metrics_migrated(
-            app_id INTEGER PRIMARY KEY,
-            city TEXT,
-            state TEXT,
-            placementDate TEXT NOT NULL
-        );
-        """
-        )
-        cursor.execute(
-            """
-        INSERT OR REPLACE INTO placement_metrics_migrated (app_id, city, state, placementDate)
-        SELECT app_id, city, state, placementDate
-        FROM placement_metrics
-        WHERE placementDate IS NOT NULL
-        """
-        )
-        cursor.execute("DROP TABLE placement_metrics")
-        cursor.execute(
-            "ALTER TABLE placement_metrics_migrated RENAME TO placement_metrics"
-        )
+    # placement_metrics_columns = [row[1] for row in cursor.fetchall()]
+    # if "hostFamilyName" in placement_metrics_columns:
+    #     cursor.execute("DROP TABLE IF EXISTS placement_metrics_migrated")
+    #     cursor.execute(
+    #         """
+    #     CREATE TABLE placement_metrics_migrated(
+    #         app_id INTEGER PRIMARY KEY,
+    #         city TEXT,
+    #         state TEXT,
+    #         placementDate TEXT NOT NULL
+    #     );
+    #     """
+    #     )
+    #     cursor.execute(
+    #         """
+    #     INSERT OR REPLACE INTO placement_metrics_migrated (app_id, city, state, placementDate)
+    #     SELECT app_id, city, state, placementDate
+    #     FROM placement_metrics
+    #     WHERE placementDate IS NOT NULL
+    #     """
+    #     )
+    #     cursor.execute("DROP TABLE placement_metrics")
+    #     cursor.execute(
+    #         "ALTER TABLE placement_metrics_migrated RENAME TO placement_metrics"
+    #     )
 
     cursor.execute(
         """

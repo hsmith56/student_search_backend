@@ -32,24 +32,22 @@ class PlacementMetricItem(BaseModel):
     placementDate: str
 
 
-@router.post(path="/", response_model=PlacementMetricItem, status_code=201)
+@router.post(path="/", response_model=PlacementMetricItem)
 def create_placement_metric_item(
     payload: PlacementMetricCreateRequest,
 ) -> PlacementMetricItem:
-    created = create_placement_metric(
+    create_placement_metric(
         app_id=payload.app_id,
         city=payload.city,
         state=payload.state,
         placement_date=payload.placementDate,
     )
-    if created is False:
-        raise HTTPException(
-            status_code=409, detail="Placement metric already exists for this app_id"
-        )
 
     item = get_placement_metric(app_id=payload.app_id)
     if item is None:
-        raise HTTPException(status_code=500, detail="Failed to create placement metric")
+        raise HTTPException(
+            status_code=500, detail="Failed to create or update placement metric"
+        )
     return PlacementMetricItem(**item)
 
 

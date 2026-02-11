@@ -1,5 +1,3 @@
-import sqlite3
-
 from repositories.base import get_connection
 
 
@@ -8,23 +6,22 @@ def create_placement_metric(
     city: str | None,
     state: str | None,
     placement_date: str,
-) -> bool:
+) -> None:
     connection = get_connection()
     cursor = connection.cursor()
-    try:
-        cursor.execute(
-            """
-        INSERT INTO placement_metrics (app_id, city, state, placementDate)
-        VALUES (?, ?, ?, ?)
-        """,
-            (app_id, city, state, placement_date),
-        )
-        connection.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        connection.close()
+    cursor.execute(
+        """
+    INSERT INTO placement_metrics (app_id, city, state, placementDate)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(app_id) DO UPDATE SET
+        city = excluded.city,
+        state = excluded.state,
+        placementDate = excluded.placementDate
+    """,
+        (app_id, city, state, placement_date),
+    )
+    connection.commit()
+    connection.close()
 
 
 def get_placement_metric(app_id: int):
