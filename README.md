@@ -29,7 +29,6 @@ This upserts into `placement_metrics` using:
 - `city`
 - `state`
 - `placementDate` (required; records missing this are skipped)
-- `hostFamilyName`
 
 Optional: import from a custom JSON path:
 ```powershell

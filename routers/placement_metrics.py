@@ -17,14 +17,12 @@ class PlacementMetricCreateRequest(BaseModel):
     city: str | None = None
     state: str | None = None
     placementDate: str = Field(min_length=1)
-    hostFamilyName: str | None = None
 
 
 class PlacementMetricUpdateRequest(BaseModel):
     city: str | None = None
     state: str | None = None
     placementDate: str | None = Field(default=None, min_length=1)
-    hostFamilyName: str | None = None
 
 
 class PlacementMetricItem(BaseModel):
@@ -32,7 +30,6 @@ class PlacementMetricItem(BaseModel):
     city: str | None = None
     state: str | None = None
     placementDate: str
-    hostFamilyName: str | None = None
 
 
 @router.post(path="/", response_model=PlacementMetricItem, status_code=201)
@@ -44,7 +41,6 @@ def create_placement_metric_item(
         city=payload.city,
         state=payload.state,
         placement_date=payload.placementDate,
-        host_family_name=payload.hostFamilyName,
     )
     if created is False:
         raise HTTPException(
@@ -70,7 +66,6 @@ def update_placement_metric_item(
         payload.city is None
         and payload.state is None
         and payload.placementDate is None
-        and payload.hostFamilyName is None
     ):
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
@@ -79,7 +74,6 @@ def update_placement_metric_item(
         city=payload.city,
         state=payload.state,
         placement_date=payload.placementDate,
-        host_family_name=payload.hostFamilyName,
     )
     if updated is False:
         raise HTTPException(status_code=404, detail="Placement metric not found")

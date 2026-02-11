@@ -8,17 +8,16 @@ def create_placement_metric(
     city: str | None,
     state: str | None,
     placement_date: str,
-    host_family_name: str | None,
 ) -> bool:
     connection = get_connection()
     cursor = connection.cursor()
     try:
         cursor.execute(
             """
-        INSERT INTO placement_metrics (app_id, city, state, placementDate, hostFamilyName)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO placement_metrics (app_id, city, state, placementDate)
+        VALUES (?, ?, ?, ?)
         """,
-            (app_id, city, state, placement_date, host_family_name),
+            (app_id, city, state, placement_date),
         )
         connection.commit()
         return True
@@ -33,7 +32,7 @@ def get_placement_metric(app_id: int):
     cursor = connection.cursor()
     cursor.execute(
         """
-    SELECT app_id, city, state, placementDate, hostFamilyName
+    SELECT app_id, city, state, placementDate
     FROM placement_metrics
     WHERE app_id = ?
     """,
@@ -49,7 +48,7 @@ def list_placement_metrics() -> list[dict]:
     cursor = connection.cursor()
     cursor.execute(
         """
-    SELECT app_id, city, state, placementDate, hostFamilyName
+    SELECT app_id, city, state, placementDate
     FROM placement_metrics
     ORDER BY app_id ASC
     """
@@ -64,7 +63,6 @@ def update_placement_metric(
     city: str | None = None,
     state: str | None = None,
     placement_date: str | None = None,
-    host_family_name: str | None = None,
 ) -> bool:
     updates = []
     values = []
@@ -78,9 +76,6 @@ def update_placement_metric(
     if placement_date is not None:
         updates.append("placementDate = ?")
         values.append(placement_date)
-    if host_family_name is not None:
-        updates.append("hostFamilyName = ?")
-        values.append(host_family_name)
 
     if len(updates) == 0:
         return False

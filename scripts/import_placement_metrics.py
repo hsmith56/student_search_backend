@@ -24,7 +24,7 @@ def _normalize_text(value: Any) -> str | None:
     return text if text != "" else None
 
 
-def _extract_row(result: dict[str, Any]) -> tuple[int, str | None, str | None, str, str | None]:
+def _extract_row(result: dict[str, Any]) -> tuple[int, str | None, str | None, str]:
     app_id = int(result["app_id"])
     payload = result.get("payload")
     if not isinstance(payload, dict):
@@ -39,7 +39,6 @@ def _extract_row(result: dict[str, Any]) -> tuple[int, str | None, str | None, s
         _normalize_text(payload.get("city")),
         _normalize_text(payload.get("state")),
         placement_date_value,
-        _normalize_text(payload.get("hostFamilyName")),
     )
 
 
@@ -52,13 +51,12 @@ def import_placement_metrics(input_path: Path) -> tuple[int, int]:
         raise ValueError("placement_data.json is missing a valid 'results' list")
 
     upsert_sql = """
-    INSERT INTO placement_metrics (app_id, city, state, placementDate, hostFamilyName)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO placement_metrics (app_id, city, state, placementDate)
+    VALUES (?, ?, ?, ?)
     ON CONFLICT(app_id) DO UPDATE SET
         city = excluded.city,
         state = excluded.state,
-        placementDate = excluded.placementDate,
-        hostFamilyName = excluded.hostFamilyName
+        placementDate = excluded.placementDate
     """
 
     imported = 0
