@@ -48,6 +48,11 @@ def create_feedback(
 
 @router.get(path="/", response_model=list[FeedbackItem])
 def get_feedback_items(current_user=Depends(get_current_user)) -> list[FeedbackItem]:
+    if current_user["account_type"] == "admin":
+        return [
+        FeedbackItem(**item)
+        for item in list_feedback()
+    ]
     return [
         FeedbackItem(**item)
         for item in list_feedback(username=current_user["username"])

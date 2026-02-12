@@ -16,7 +16,9 @@ def initialize_db() -> None:
         username TEXT UNIQUE NOT NULL,
         hashed_password TEXT NOT NULL,
         first_name TEXT NOT NULL,
-        favorites TEXT
+        favorites TEXT,
+        account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc')),
+        "Placing State" TEXT
     )
     """
     )
@@ -193,6 +195,32 @@ def initialize_db() -> None:
         ADD COLUMN first_name TEXT
         """
         )
+
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = [row[1] for row in cursor.fetchall()]
+    if "account_type" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc'))
+        """
+        )
+    if "Placing State" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN "Placing State" TEXT
+        """
+        )
+
+    cursor.execute(
+        """
+    UPDATE users
+    SET account_type = 'lc'
+    WHERE account_type IS NULL
+      OR account_type NOT IN ('admin', 'rpm', 'lc')
+    """
+    )
 
     connection.commit()
     connection.close()
