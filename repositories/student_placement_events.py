@@ -115,32 +115,50 @@ def clear_student_placement_events() -> int:
 
 
 def list_student_placement_events(
-    *, student_id: int | None = None, limit: int = 100
+    *,
+    student_id: int | None = None,
+    limit: int = 100,
+    name: str | None = None,
+    new_status: str | None = None,
+    favorite_student_ids: list[int] | None = None,
 ) -> list[dict]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
+    where_clauses: list[str] = []
+    values: list[object] = []
 
-    if student_id is None:
-        cursor.execute(
-            """
-        SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
-        FROM student_placement_events
-        ORDER BY event_at DESC, event_id DESC
-        LIMIT ?
-        """,
-            (limit,),
-        )
-    else:
-        cursor.execute(
-            """
-        SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
-        FROM student_placement_events
-        WHERE student_id = ?
-        ORDER BY event_at DESC, event_id DESC
-        LIMIT ?
-        """,
-            (student_id, limit),
-        )
+    if student_id is not None:
+        where_clauses.append("student_id = ?")
+        values.append(student_id)
+    if name is not None and name.strip() != "":
+        where_clauses.append("LOWER(COALESCE(first_name, '')) LIKE LOWER(?)")
+        values.append(f"%{name.strip()}%")
+    if new_status is not None and new_status.strip() != "":
+        normalized_status = new_status.strip().lower()
+        if normalized_status == "placed":
+            where_clauses.append("LOWER(COALESCE(status_to, '')) LIKE ?")
+            values.append("place%")
+        else:
+            where_clauses.append("LOWER(COALESCE(status_to, '')) = ?")
+            values.append(normalized_status)
+    if favorite_student_ids is not None:
+        if len(favorite_student_ids) == 0:
+            connection.close()
+            return []
+        placeholders = ",".join("?" for _ in favorite_student_ids)
+        where_clauses.append(f"student_id IN ({placeholders})")
+        values.extend(favorite_student_ids)
+
+    query = """
+    SELECT event_id, student_id, first_name, event_type, event_at, placement_state, coordinator_id, manager_id, status_from, status_to
+    FROM student_placement_events
+    """
+    if where_clauses:
+        query += "\nWHERE " + "\n  AND ".join(where_clauses)
+    query += "\nORDER BY event_at DESC, event_id DESC\nLIMIT ?"
+    values.append(limit)
+
+    cursor.execute(query, tuple(values))
 
     rows = cursor.fetchall()
     connection.close()
