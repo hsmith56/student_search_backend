@@ -31,9 +31,13 @@ def filter_students(
         logger.debug("Filter step 1 count=%s", len(res))
 
     if filters.state and filters.state != "all":
-        res = [
-            s for s in res if filters.state.lower() in [st.lower() for st in s.states]
-        ]
+        if filters.state == "no_pref":
+            res = [
+            s for s in res if len(s.states) == 0]
+        else:
+            res = [
+                s for s in res if filters.state.lower() in [st.lower() for st in s.states]
+            ]
         logger.debug("Filter step 2 count=%s", len(res))
 
     if filters.interests:
