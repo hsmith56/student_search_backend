@@ -17,13 +17,13 @@ class BasicStudent(BaseModel):
     urban_request: str
     placement_status: str
     gender_desc: str  # use for embeddings
+    states: set[str]
 
 
 class FullStudent(BasicStudent):
     id: int
     current_grade: int
-    status: str
-    states: set[str]
+    status: str    
     early_placement: Optional[bool] = False
     single_placement: bool
     double_placement: bool
