@@ -265,3 +265,24 @@ def get_last_update_time() -> str:
     connection.close()
 
     return last_refresh_time.strftime("%b %d %H:%M EST")
+
+
+def get_last_update_datetime() -> datetime | None:
+    connection = get_connection(detect_types=True)
+    cursor = connection.cursor()
+    cursor.execute("SELECT last_refresh_date FROM admin ORDER BY id LIMIT 1")
+    row = cursor.fetchone()
+    connection.close()
+
+    if row is None or row[0] is None:
+        return None
+
+    last_refresh_time = row[0]
+    if isinstance(last_refresh_time, datetime):
+        return last_refresh_time
+    if isinstance(last_refresh_time, str):
+        try:
+            return datetime.fromisoformat(last_refresh_time)
+        except ValueError:
+            return None
+    return None

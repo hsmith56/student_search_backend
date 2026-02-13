@@ -1,7 +1,10 @@
 import logging
 import time
+from datetime import datetime, timedelta
 
-from repositories.admin import update_time
+import pytz
+
+from repositories.admin import get_last_update_datetime, update_time
 from repositories.students import get_all_full_students, get_full_student_by_id
 from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
@@ -13,6 +16,7 @@ from pydantic import BaseModel
 
 from models.search_filters import SearchFilters
 from models.student import BasicStudent, FullStudent
+from routers.auth import get_current_user
 from utils.search_filters import filter_students
 
 router: APIRouter = APIRouter(prefix="/students", tags=["students"])
@@ -80,7 +84,24 @@ def search(
 
 
 @router.post(path="/update_db")
-def update_student_db() -> dict:
+def update_student_db(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["account_type"] == "lc":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    last_update = get_last_update_datetime()
+    if last_update is not None:
+        eastern = pytz.timezone("US/Eastern")
+        now = datetime.now(eastern)
+        if last_update.tzinfo is None:
+            last_update = eastern.localize(last_update)
+        else:
+            last_update = last_update.astimezone(eastern)
+        if now - last_update < timedelta(hours=4):
+            return {
+                "message": "Student refresh skipped",
+                "detail": "Last refresh was less than 4 hours ago",
+            }
+
     start = time.perf_counter()
     students_needing_stage_2 = get_updates_from_beacon()
     processed = len(students_needing_stage_2)
