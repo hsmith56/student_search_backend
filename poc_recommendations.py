@@ -149,6 +149,30 @@ def get_all_students(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return cursor.fetchall()
 
 
+def get_last_n_placed_students(
+    conn: sqlite3.Connection, n: int
+) -> tuple[list[sqlite3.Row], list[int], list[int]]:
+    if n <= 0:
+        return [], [], []
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT app_id
+        FROM placement_metrics
+        WHERE placementDate IS NOT NULL AND TRIM(placementDate) != ''
+        ORDER BY placementDate DESC
+        LIMIT ?
+        """,
+        (n,),
+    )
+    app_ids = [int(row[0]) for row in cursor.fetchall()]
+    students = get_students_by_app_ids(conn, app_ids)
+    resolved_ids = [int(row["app_id"]) for row in students]
+    unresolved_ids = sorted(set(app_ids) - set(resolved_ids))
+    return students, app_ids, unresolved_ids
+
+
 def filter_students_by_compare_scope(
     students: list[sqlite3.Row], compare: str
 ) -> list[sqlite3.Row]:
@@ -860,6 +884,7 @@ def run(
     use_spacy: bool,
     spacy_only: bool,
     spacy_engine: bool,
+    last_n_placed: int | None,
 ) -> int:
     conn = get_connection()
     try:
@@ -868,24 +893,42 @@ def run(
             print("No matching user found.")
             return 1
 
-        favorites_raw = parse_json_list(user["favorites"])
-        favorite_ids = [int(item) for item in favorites_raw if str(item).isdigit()]
-
         print("Recommendation POC")
-        print(f"User: {user['username']} ({user['first_name']})")
-        print(f"Favorite app_ids in user profile: {len(favorite_ids)}")
+        baseline_source = "favorites"
+        requested_ids: list[int] = []
+        unresolved: list[int] = []
 
-        favorite_students = get_students_by_app_ids(conn, favorite_ids)
+        if last_n_placed is not None:
+            if last_n_placed <= 0:
+                print("--last-n-placed must be greater than 0")
+                return 1
+            baseline_source = f"placement_metrics:last_{last_n_placed}_placed"
+            favorite_students, requested_ids, unresolved = get_last_n_placed_students(
+                conn, last_n_placed
+            )
+            print(f"Baseline source: {baseline_source}")
+            print(f"Requested app_ids from placement_metrics: {len(requested_ids)}")
+        else:
+            favorites_raw = parse_json_list(user["favorites"])
+            favorite_ids = [int(item) for item in favorites_raw if str(item).isdigit()]
+            requested_ids = favorite_ids
+            favorite_students = get_students_by_app_ids(conn, favorite_ids)
+            unresolved = sorted(
+                set(favorite_ids) - {int(row["app_id"]) for row in favorite_students}
+            )
+            print(f"User: {user['username']} ({user['first_name']})")
+            print(f"Baseline source: {baseline_source}")
+            print(f"Favorite app_ids in user profile: {len(favorite_ids)}")
+
         all_students = get_all_students(conn)
         scoped_students = filter_students_by_compare_scope(all_students, compare)
 
-        print(f"Favorite app_ids resolved in student_full_view: {len(favorite_students)}")
+        print(f"Baseline app_ids resolved in student_full_view: {len(favorite_students)}")
         print(
             f"Compare scope: {compare} | corpus size in scope: {len(scoped_students)}"
         )
-        unresolved = sorted(set(favorite_ids) - {int(row['app_id']) for row in favorite_students})
         if unresolved:
-            print(f"Unresolved favorite app_ids (not currently in full view): {unresolved}")
+            print(f"Unresolved baseline app_ids (not currently in full view): {unresolved}")
 
         if not favorite_students:
             print("No favorite students available to derive recommendations.")
@@ -1106,6 +1149,12 @@ def main() -> int:
         default=False,
         help="Use standalone spaCy commonalities plus favorite interests to generate recommendations.",
     )
+    parser.add_argument(
+        "--last-n-placed",
+        type=int,
+        default=None,
+        help="Use N most recently placed students from placement_metrics as baseline instead of favorites.",
+    )
 
     args = parser.parse_args()
     return run(
@@ -1118,6 +1167,7 @@ def main() -> int:
         use_spacy=args.spacy,
         spacy_only=args.spacy_only,
         spacy_engine=args.spacy_engine,
+        last_n_placed=args.last_n_placed,
     )
 
 
