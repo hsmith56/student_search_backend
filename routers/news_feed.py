@@ -15,11 +15,13 @@ def get_news_feed(
     new_status: str | None = Query(default=None),
     show_only_favorites: bool = Query(default=False),
     current_user: dict = Depends(get_current_user),
+    
 ) -> list[dict]:
     favorite_student_ids: list[int] | None = None
     if show_only_favorites:
         favorites = []
-        if current_user.get("favorites"):
+        if current_user["favorites"]:
+            print(current_user['favorites'])
             try:
                 favorites = json.loads(current_user["favorites"])
             except json.JSONDecodeError:

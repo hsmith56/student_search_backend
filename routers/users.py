@@ -58,25 +58,25 @@ def get_user_favorites(
 
 @router.patch(path="/favorites")
 def add_favorite(
-    pax_id: str = Query(default=...), current_user=Depends(dependency=get_current_user)
+    app_id: str = Query(default=...), current_user=Depends(dependency=get_current_user)
 ):
     favorites = []
     if current_user["favorites"]:
         favorites = json.loads(current_user["favorites"])
-    if pax_id not in favorites:
-        favorites.append(pax_id)
+    if app_id not in favorites:
+        favorites.append(app_id)
         update_user(username=current_user["username"], favorites=favorites)
     return {"message": "Favorite added"}
 
 
 @router.delete(path="/favorites")
 def remove_favorite(
-    pax_id: str = Query(default=...), current_user=Depends(dependency=get_current_user)
+    app_id: str = Query(default=...), current_user=Depends(dependency=get_current_user)
 ):
     favorites = []
     if current_user["favorites"]:
         favorites = json.loads(current_user["favorites"])
-    if pax_id in favorites:
-        favorites.remove(pax_id)
+    if app_id in favorites:
+        favorites.remove(app_id)
         update_user(username=current_user["username"], favorites=favorites)
     return {"message": "Favorite removed"}

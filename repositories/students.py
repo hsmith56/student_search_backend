@@ -323,7 +323,7 @@ def get_favorites(favorites_list: list[int]) -> list[FullStudent]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
     placeholders = ",".join("?" for _ in favorites_list)
-    cmd_str = f"""SELECT * FROM student_full_view WHERE pax_id IN ({placeholders})"""
+    cmd_str = f"""SELECT * FROM student_full_view WHERE app_id IN ({placeholders})"""
     cursor.execute(cmd_str, favorites_list)
     list_of_all_students = [row_to_student(row) for row in cursor.fetchall()]
     connection.close()
