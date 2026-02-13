@@ -72,8 +72,9 @@ def filter_students(
         res = [s for s in res if filters.usahsId.lower() in s.usahsid.lower()]
         logger.debug("Filter step 6 count=%s", len(res))
 
-    if filters.country_of_origin and filters.country_of_origin != "all":
-        res = [s for s in res if s.country.lower() == filters.country_of_origin.lower()]
+    if filters.country_of_origin and "all" not in filters.country_of_origin:
+
+        res = [s for s in res if s.country.lower() in [x.lower() for x in filters.country_of_origin]]
         logger.debug("Filter step 7 count=%s", len(res))
 
     if filters.adjusted_age and filters.adjusted_age != "all":
