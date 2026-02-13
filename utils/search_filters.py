@@ -34,6 +34,9 @@ def filter_students(
         if filters.state == "no_pref":
             res = [
             s for s in res if len(s.states) == 0]
+        elif filters.state == "state_only":
+            res = [
+            s for s in res if len(s.states) != 0]
         else:
             res = [
                 s for s in res if filters.state.lower() in [st.lower() for st in s.states]
