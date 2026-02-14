@@ -212,7 +212,7 @@ def get_placement_requests(field_id):
     # {"id":3,"displayName":"Region 8 – Southwest","systemName":"region8_sw","sequence":8}]
     if region is not None and r_json.get('regionalOrStatePlacementPreferred') == "Regional":
         for state in state_mappings_orig:
-            if state.get("regionId") == region:
+            if region in state.get("regionId", []):
                 states.append(state['name'])
     if california != 14 and california:
         states.append("California")

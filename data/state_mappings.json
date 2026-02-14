@@ -4,328 +4,328 @@
     "abbreviation": "AL",
     "name": "Alabama",
     "isTerritory": false,
-    "regionId": 11
+    "regionId": [11,2]
   },
   {
     "id": 2,
     "abbreviation": "AK",
     "name": "Alaska",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   },
   {
     "id": 3,
     "abbreviation": "AZ",
     "name": "Arizona",
     "isTerritory": false,
-    "regionId": 14
+    "regionId": [14,4]
   },
   {
     "id": 4,
     "abbreviation": "AR",
     "name": "Arkansas",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 6,
     "abbreviation": "CO",
     "name": "Colorado",
     "isTerritory": false,
-    "regionId": 14
+    "regionId": [14,4]
   },
   {
     "id": 7,
     "abbreviation": "CT",
     "name": "Connecticut",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 8,
     "abbreviation": "DE",
     "name": "Delaware",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 11,
     "abbreviation": "GA",
     "name": "Georgia",
     "isTerritory": false,
-    "regionId": 11
+    "regionId": [11,2]
   },
   {
     "id": 13,
     "abbreviation": "ID",
     "name": "Idaho",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   },
   {
     "id": 14,
     "abbreviation": "IL",
     "name": "Illinois",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 15,
     "abbreviation": "IN",
     "name": "Indiana",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 16,
     "abbreviation": "IA",
     "name": "Iowa",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 17,
     "abbreviation": "KS",
     "name": "Kansas",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 18,
     "abbreviation": "KY",
     "name": "Kentucky",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 19,
     "abbreviation": "LA",
     "name": "Louisiana",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 20,
     "abbreviation": "ME",
     "name": "Maine",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 21,
     "abbreviation": "MD",
     "name": "Maryland",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 22,
     "abbreviation": "MA",
     "name": "Massachusetts",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 23,
     "abbreviation": "MI",
     "name": "Michigan",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 24,
     "abbreviation": "MN",
     "name": "Minnesota",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 25,
     "abbreviation": "MS",
     "name": "Mississippi",
     "isTerritory": false,
-    "regionId": 11
+    "regionId": [11,2]
   },
   {
     "id": 26,
     "abbreviation": "MO",
     "name": "Missouri",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 27,
     "abbreviation": "MT",
     "name": "Montana",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   },
   {
     "id": 28,
     "abbreviation": "NE",
     "name": "Nebraska",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 29,
     "abbreviation": "NV",
     "name": "Nevada",
     "isTerritory": false,
-    "regionId": 14
+    "regionId": [14,4]
   },
   {
     "id": 30,
     "abbreviation": "NH",
     "name": "New Hampshire",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 31,
     "abbreviation": "NJ",
     "name": "New Jersey",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 32,
     "abbreviation": "NM",
     "name": "New Mexico",
     "isTerritory": false,
-    "regionId": 14
+    "regionId": [14,4]
   },
   {
     "id": 33,
     "abbreviation": "NY",
     "name": "New York",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 34,
     "abbreviation": "NC",
     "name": "North Carolina",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 35,
     "abbreviation": "ND",
     "name": "North Dakota",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 36,
     "abbreviation": "OH",
     "name": "Ohio",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 37,
     "abbreviation": "OK",
     "name": "Oklahoma",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 38,
     "abbreviation": "OR",
     "name": "Oregon",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   },
   {
     "id": 39,
     "abbreviation": "PA",
     "name": "Pennsylvania",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 40,
     "abbreviation": "RI",
     "name": "Rhode Island",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 41,
     "abbreviation": "SC",
     "name": "South Carolina",
     "isTerritory": false,
-    "regionId": 11
+    "regionId": [11,2]
   },
   {
     "id": 42,
     "abbreviation": "SD",
     "name": "South Dakota",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 43,
     "abbreviation": "TN",
     "name": "Tennessee",
     "isTerritory": false,
-    "regionId": 11
+    "regionId": [11,2]
   },
   {
     "id": 44,
     "abbreviation": "TX",
     "name": "Texas",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 45,
     "abbreviation": "UT",
     "name": "Utah",
     "isTerritory": false,
-    "regionId": 14
+    "regionId": [14,4]
   },
   {
     "id": 46,
     "abbreviation": "VT",
     "name": "Vermont",
     "isTerritory": false,
-    "regionId": 9
+    "regionId": [9,1]
   },
   {
     "id": 47,
     "abbreviation": "VA",
     "name": "Virginia",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 48,
     "abbreviation": "WA",
     "name": "Washington",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   },
   {
     "id": 49,
     "abbreviation": "WV",
     "name": "West Virginia",
     "isTerritory": false,
-    "regionId": 10
+    "regionId": [10,6]
   },
   {
     "id": 50,
     "abbreviation": "WI",
     "name": "Wisconsin",
     "isTerritory": false,
-    "regionId": 12
+    "regionId": [12,7]
   },
   {
     "id": 51,
     "abbreviation": "WY",
     "name": "Wyoming",
     "isTerritory": false,
-    "regionId": 13
+    "regionId": [13,5]
   }
 ]

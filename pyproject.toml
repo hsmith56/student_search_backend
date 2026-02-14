@@ -10,7 +10,6 @@ dependencies = [
     "pytz>=2025.2",
     "rapidfuzz>=3.13.0",
     "requests>=2.32.5",
-    "summa>=1.2.0",
 ]
 
 [tool.basedpyright]
