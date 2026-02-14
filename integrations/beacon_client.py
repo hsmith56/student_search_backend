@@ -59,10 +59,14 @@ class BeaconClient:
         token = self._get_token()
 
         attempt = 0
+        force_connection_close = False
         while True:
             request_headers = dict(headers)
             request_headers["Authorization"] = token
             request_headers.setdefault("Accept", "application/json, text/plain, */*")
+            if force_connection_close:
+                # Force a fresh TCP/TLS handshake on retries after transport errors.
+                request_headers["Connection"] = "close"
 
             try:
                 response = self.session.request(
@@ -76,6 +80,9 @@ class BeaconClient:
                 if attempt >= self.max_retries:
                     raise
                 sleep_for = self.backoff_seconds * (2**attempt)
+                # Clear pooled sockets in case TLS/session state is stale/corrupted.
+                self.session.close()
+                force_connection_close = True
                 logger.warning(
                     "Beacon request error, retrying in %ss: %s", sleep_for, exc
                 )
@@ -88,6 +95,7 @@ class BeaconClient:
                     return response
                 token = self._refresh_token()
                 sleep_for = self.backoff_seconds * (2**attempt)
+                force_connection_close = True
                 logger.warning(
                     "Beacon auth rejected (%s), retrying in %ss",
                     response.status_code,
@@ -101,6 +109,7 @@ class BeaconClient:
                 if attempt >= self.max_retries:
                     return response
                 sleep_for = self.backoff_seconds * (2**attempt)
+                force_connection_close = True
                 logger.warning(
                     "Beacon transient error %s, retrying in %ss",
                     response.status_code,

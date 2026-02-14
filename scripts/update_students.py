@@ -2,8 +2,11 @@ import argparse
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
+
+from requests.adapters import HTTPAdapter
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -20,10 +23,17 @@ from utils.beacon_refresh_stage2 import (
 )
 
 logger = logging.getLogger(__name__)
+DEFAULT_THREADS = 8
 
 
 def _authenticate_beacon_client() -> None:
     beacon_client._get_token()
+
+
+def _configure_beacon_client_pool(max_workers: int) -> None:
+    adapter = HTTPAdapter(pool_connections=max_workers, pool_maxsize=max_workers)
+    beacon_client.session.mount("https://", adapter)
+    beacon_client.session.mount("http://", adapter)
 
 
 def _get_all_student_app_ids() -> list[int]:
@@ -113,73 +123,129 @@ def _fetch_usahsid_for_app(app_id: int) -> str:
     return str(usahsid).strip()
 
 
-def update_states(app_ids: list[int]) -> tuple[int, int]:
-    updated = 0
+def update_states(app_ids: list[int], max_workers: int) -> tuple[int, int]:
+    updates_by_app_id: dict[int, str] = {}
     failed = 0
-    with get_connection() as connection:
-        cursor = connection.cursor()
+
+    # NOTE: With max_workers=1, ThreadPoolExecutor still runs work on a background
+    # thread. Some environments exhibit intermittent SSL failures only when the
+    # TLS handshake happens off the main thread, so avoid the executor in that case.
+    if max_workers <= 1:
         for index, app_id in enumerate(app_ids, start=1):
             try:
                 states = _fetch_states_for_app(app_id)
-                logger.info(
-                    "State values app_id=%s states=%s",
-                    app_id,
-                    json.dumps(states),
-                )
-                cursor.execute(
-                    """
-                    UPDATE student_full_view
-                    SET states = ?
-                    WHERE app_id = ?
-                    """,
-                    (json.dumps(states), app_id),
-                )
-                updated += 1
+                states_json = json.dumps(states)
+                updates_by_app_id[app_id] = states_json
+                logger.info("State values app_id=%s states=%s", app_id, states_json)
             except Exception as exc:
                 failed += 1
                 logger.warning("State update failed for app_id=%s: %s", app_id, exc)
 
             if index % 100 == 0:
                 logger.info(
-                    "State progress: processed=%s updated=%s failed=%s",
+                    "State fetch progress: processed=%s queued=%s failed=%s",
                     index,
-                    updated,
+                    len(updates_by_app_id),
                     failed,
                 )
-        connection.commit()
-    return updated, failed
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_states_for_app, app_id): app_id for app_id in app_ids
+            }
+            for index, future in enumerate(as_completed(futures), start=1):
+                app_id = futures[future]
+                try:
+                    states = future.result()
+                    states_json = json.dumps(states)
+                    updates_by_app_id[app_id] = states_json
+                    logger.info("State values app_id=%s states=%s", app_id, states_json)
+                except Exception as exc:
+                    failed += 1
+                    logger.warning("State update failed for app_id=%s: %s", app_id, exc)
 
+                if index % 100 == 0:
+                    logger.info(
+                        "State fetch progress: processed=%s queued=%s failed=%s",
+                        index,
+                        len(updates_by_app_id),
+                        failed,
+                    )
 
-def update_usahsids(app_ids: list[int]) -> tuple[int, int]:
-    updated = 0
-    failed = 0
     with get_connection() as connection:
         cursor = connection.cursor()
+        for app_id in app_ids:
+            states_json = updates_by_app_id.get(app_id)
+            if states_json is None:
+                continue
+            cursor.execute(
+                """
+                UPDATE student_full_view
+                SET states = ?
+                WHERE app_id = ?
+                """,
+                (states_json, app_id),
+            )
+        connection.commit()
+    return len(updates_by_app_id), failed
+
+
+def update_usahsids(app_ids: list[int], max_workers: int) -> tuple[int, int]:
+    updates_by_app_id: dict[int, str] = {}
+    failed = 0
+
+    if max_workers <= 1:
         for index, app_id in enumerate(app_ids, start=1):
             try:
-                usahsid = _fetch_usahsid_for_app(app_id)
-                cursor.execute(
-                    """
-                    UPDATE student_full_view
-                    SET usahsid = ?
-                    WHERE app_id = ?
-                    """,
-                    (usahsid, app_id),
-                )
-                updated += 1
+                updates_by_app_id[app_id] = _fetch_usahsid_for_app(app_id)
             except Exception as exc:
                 failed += 1
                 logger.warning("usahsid update failed for app_id=%s: %s", app_id, exc)
 
             if index % 100 == 0:
                 logger.info(
-                    "usahsid progress: processed=%s updated=%s failed=%s",
+                    "usahsid fetch progress: processed=%s queued=%s failed=%s",
                     index,
-                    updated,
+                    len(updates_by_app_id),
                     failed,
                 )
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_usahsid_for_app, app_id): app_id for app_id in app_ids
+            }
+            for index, future in enumerate(as_completed(futures), start=1):
+                app_id = futures[future]
+                try:
+                    updates_by_app_id[app_id] = future.result()
+                except Exception as exc:
+                    failed += 1
+                    logger.warning("usahsid update failed for app_id=%s: %s", app_id, exc)
+
+                if index % 100 == 0:
+                    logger.info(
+                        "usahsid fetch progress: processed=%s queued=%s failed=%s",
+                        index,
+                        len(updates_by_app_id),
+                        failed,
+                    )
+
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        for app_id in app_ids:
+            usahsid = updates_by_app_id.get(app_id)
+            if usahsid is None:
+                continue
+            cursor.execute(
+                """
+                UPDATE student_full_view
+                SET usahsid = ?
+                WHERE app_id = ?
+                """,
+                (usahsid, app_id),
+            )
         connection.commit()
-    return updated, failed
+    return len(updates_by_app_id), failed
 
 
 def main() -> None:
@@ -205,6 +271,12 @@ def main() -> None:
         default=None,
         help="Only update students whose current usahsid contains this value (case-insensitive).",
     )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=DEFAULT_THREADS,
+        help="Number of thread pool workers for Beacon HTTP requests (default: 8).",
+    )
     args = parser.parse_args()
 
     if not args.state and not args.usahsid:
@@ -212,6 +284,8 @@ def main() -> None:
 
     setup_logging()
     initialize_db()
+    max_workers = max(1, int(args.threads))
+    _configure_beacon_client_pool(max_workers=max_workers)
     _authenticate_beacon_client()
 
     app_ids = _get_filtered_student_app_ids(args.query)
@@ -222,13 +296,14 @@ def main() -> None:
         args.usahsid,
         args.query,
     )
+    logger.info("Beacon request threads=%s", max_workers)
 
     if len(app_ids) == 0:
         logger.info("No students matched the provided filter. Exiting.")
         return
 
     if args.state:
-        state_success, state_failures = update_states(app_ids)
+        state_success, state_failures = update_states(app_ids, max_workers=max_workers)
         logger.info(
             "State update complete. updated=%s failed=%s",
             state_success,
@@ -236,7 +311,9 @@ def main() -> None:
         )
 
     if args.usahsid:
-        usahsid_success, usahsid_failures = update_usahsids(app_ids)
+        usahsid_success, usahsid_failures = update_usahsids(
+            app_ids, max_workers=max_workers
+        )
         logger.info(
             "usahsid update complete. updated=%s failed=%s",
             usahsid_success,
