@@ -30,16 +30,20 @@ def filter_students(
 
         logger.debug("Filter step 1 count=%s", len(res))
 
-    if filters.state and filters.state != "all":
-        if filters.state == "no_pref":
-            res = [
-            s for s in res if len(s.states) == 0]
-        elif filters.state == "state_only":
-            res = [
-            s for s in res if len(s.states) != 0]
+    if filters.state is not None:
+        state_filters = [state.lower() for state in filters.state if state.strip()]
+
+        if state_filters == ["all"]:
+            pass
+        elif state_filters == ["no_pref"]:
+            res = [s for s in res if len(s.states) == 0]
+        elif state_filters == ["state_only"]:
+            res = [s for s in res if len(s.states) != 0]
         else:
             res = [
-                s for s in res if filters.state.lower() in [st.lower() for st in s.states]
+                s
+                for s in res
+                if any(st in filters.state for st in s.states)
             ]
         logger.debug("Filter step 2 count=%s", len(res))
 
