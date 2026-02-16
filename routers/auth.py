@@ -3,10 +3,11 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 import datetime
 import hashlib
+import secrets
 import uuid
 from pydantic import BaseModel
 
-from repositories.admin import get_hashed_auth
+from core.config import settings
 from repositories.users import create_user, read_user
 
 SESSION_COOKIE_NAME = "session_id"
@@ -26,6 +27,15 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password, hashed_password) -> Any:
     return hash_password(password=plain_password) == hashed_password
+
+
+def verify_signup_code(provided_code: str, configured_code: str) -> bool:
+    # Supports hashed values (legacy behavior) and plain values from env.
+    if configured_code == "":
+        return False
+    if verify_password(provided_code, configured_code):
+        return True
+    return secrets.compare_digest(provided_code, configured_code)
 
 
 def create_session(username: str, user_id: str, first_name: str) -> str:
@@ -226,13 +236,21 @@ class CreateUserRequest(BaseModel):
 
 @router.post(path="/register")
 def register_user(user: CreateUserRequest):
-    if (
-        verify_password(
-            plain_password=user.code,
-            hashed_password=get_hashed_auth(),
+    account_type = None
+    rpm_signup_code = settings.rpm_signup_code.strip()
+    lc_signup_code = settings.lc_signup_code.strip()
+
+    if rpm_signup_code == "" and lc_signup_code == "":
+        raise HTTPException(
+            status_code=500, detail="Signup codes are not configured on the server"
         )
-        is False
-    ):
+
+    if verify_signup_code(provided_code=user.code, configured_code=rpm_signup_code):
+        account_type = "rpm"
+    elif verify_signup_code(provided_code=user.code, configured_code=lc_signup_code):
+        account_type = "lc"
+
+    if account_type is None:
         raise HTTPException(status_code=401, detail="Invalid signup code provided")
 
     existing = read_user(username=user.username)
@@ -245,5 +263,6 @@ def register_user(user: CreateUserRequest):
         password=user.password,
         first_name=user.first_name,
         favorites=[],
+        account_type=account_type,
     )
     return {"message": f"User '{user.username}' created successfully"}

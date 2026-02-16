@@ -94,6 +94,8 @@ class Settings:
         self.beacon_password = os.getenv("BEACON_PASSWORD") or os.getenv(
             "beacon_password", ""
         )
+        self.rpm_signup_code = os.getenv("RPM_SIGNUP_CODE", "")
+        self.lc_signup_code = os.getenv("LC_SIGNUP_CODE", "")
 
 
 settings = Settings()

@@ -222,6 +222,16 @@ def initialize_db() -> None:
     """
     )
 
+    cursor.execute("PRAGMA table_info(admin)")
+    admin_columns = [row[1] for row in cursor.fetchall()]
+    if "lc_auth_code" not in admin_columns:
+        cursor.execute(
+            """
+        ALTER TABLE admin
+        ADD COLUMN lc_auth_code TEXT
+        """
+        )
+
     connection.commit()
     connection.close()
 
@@ -229,10 +239,23 @@ def initialize_db() -> None:
 def get_hashed_auth() -> str:
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("""SELECT auth_code FROM admin;""")
+    cursor.execute("""SELECT auth_code FROM admin ORDER BY id LIMIT 1;""")
     auth_code = cursor.fetchone()
     connection.close()
+    if not auth_code:
+        return ""
     return auth_code[0]
+
+
+def get_hashed_lc_auth() -> str:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""SELECT lc_auth_code FROM admin ORDER BY id LIMIT 1;""")
+    lc_auth_code = cursor.fetchone()
+    connection.close()
+    if not lc_auth_code or not lc_auth_code[0]:
+        return ""
+    return lc_auth_code[0]
 
 
 def update_time() -> None:
