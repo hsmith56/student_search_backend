@@ -15,7 +15,7 @@ def create_user(
     first_name,
     favorites=None,
     account_type: str = "lc",
-    placing_state: str | None = None,
+    placing_states: str | None = None,
 ) -> None:
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
@@ -37,7 +37,7 @@ def create_user(
             first_name,
             favorites,
             account_type,
-            "Placing State"
+            "placing_states"
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
@@ -48,7 +48,7 @@ def create_user(
                 first_name,
                 favorites_str,
                 account_type,
-                placing_state,
+                placing_states,
             ),
         )
         connection.commit()
@@ -87,7 +87,7 @@ def update_user(
     first_name: str = "",
     favorites=None,
     account_type: str | None = None,
-    placing_state: str | None = None,
+    placing_states: str | None = None,
 ) -> None:
     connection = get_connection()
     cursor = connection.cursor()
@@ -115,12 +115,13 @@ def update_user(
         """,
             (account_type, username),
         )
-    if placing_state is not None:
+    if placing_states is not None and isinstance(placing_states, list):
+        placing_states_str = json.dumps(placing_states)
         cursor.execute(
             """
-        UPDATE users SET "Placing State" = ? WHERE username = ?
+        UPDATE users SET "placing_states" = ? WHERE username = ?
         """,
-            (placing_state, username),
+            (placing_states_str, username),
         )
     connection.commit()
     connection.close()

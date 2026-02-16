@@ -80,3 +80,21 @@ def remove_favorite(
         favorites.remove(app_id)
         update_user(username=current_user["username"], favorites=favorites)
     return {"message": "Favorite removed"}
+
+
+@router.get("/states")
+def get_states(current_user=Depends(dependency=get_current_user)):
+    try:
+        states = json.loads(current_user["placing_states"])
+        return states
+    except Exception as e:
+        return []
+
+
+@router.patch("/states")
+def update_states(states_list: list[str], current_user=Depends(dependency=get_current_user)):
+    try:
+        update_user(username=current_user["username"], placing_states=states_list)
+    except Exception as e:
+        return {"message": f"Error - {e}"}
+   
