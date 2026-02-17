@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from repositories.user_signup import (
     create_signup_request,
     list_signup_requests_for_user,
+    update_signup_request_for_user,
 )
 from routers.auth import get_current_user
 
@@ -36,10 +37,17 @@ class SignupRequestItem(BaseModel):
     submitter_id: str
     created_at: str
     used_at: str | None = None
+    auth_code: str | None = None
+    notes_text: str | None = None
 
 
 class SignupRequestCreated(SignupRequestItem):
     auth_code: str
+
+
+class SignupRequestUpdate(BaseModel):
+    states: list[str] | None = None
+    notes_text: str | None = None
 
 
 @router.post(path="/register", response_model=SignupRequestCreated, status_code=201)
@@ -74,3 +82,31 @@ def get_rpm_signup_requests(
         requester_role=current_user["account_type"],
     )
     return [SignupRequestItem(**row) for row in rows]
+
+
+@router.patch(path="/register/{signup_id}", response_model=SignupRequestItem)
+def update_rpm_signup_request(
+    signup_id: int,
+    payload: SignupRequestUpdate,
+    current_user: dict = Depends(get_current_user),
+) -> SignupRequestItem:
+    _require_rpm_or_admin(current_user=current_user)
+
+    update_states = "states" in payload.model_fields_set
+    update_notes = "notes_text" in payload.model_fields_set
+    if update_states is False and update_notes is False:
+        raise HTTPException(status_code=400, detail="No fields provided to update")
+
+    updated = update_signup_request_for_user(
+        signup_id=signup_id,
+        requester_id=current_user["id"],
+        requester_role=current_user["account_type"],
+        states=payload.states,
+        notes_text=payload.notes_text,
+        update_states=update_states,
+        update_notes=update_notes,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Signup request not found")
+
+    return SignupRequestItem(**updated)

@@ -31,6 +31,8 @@ def initialize_db() -> None:
         last_name TEXT NOT NULL,
         email TEXT,
         states TEXT NOT NULL,
+        notes TEXT,
+        auth_code TEXT,
         auth_code_hash TEXT NOT NULL UNIQUE,
         account_type TEXT NOT NULL CHECK (account_type IN ('lc', 'rpm')),
         code_used INTEGER NOT NULL DEFAULT 0 CHECK (code_used IN (0,1)),
@@ -253,6 +255,23 @@ def initialize_db() -> None:
       OR account_type NOT IN ('admin', 'rpm', 'lc')
     """
     )
+
+    cursor.execute("PRAGMA table_info(user_signup)")
+    signup_columns = [row[1] for row in cursor.fetchall()]
+    if "notes" not in signup_columns:
+        cursor.execute(
+            """
+        ALTER TABLE user_signup
+        ADD COLUMN notes TEXT
+        """
+        )
+    if "auth_code" not in signup_columns:
+        cursor.execute(
+            """
+        ALTER TABLE user_signup
+        ADD COLUMN auth_code TEXT
+        """
+        )
 
     cursor.execute("PRAGMA table_info(admin)")
     admin_columns = [row[1] for row in cursor.fetchall()]

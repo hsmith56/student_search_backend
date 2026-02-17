@@ -85,6 +85,91 @@ def read_user(username="", user_id=""):
     return user
 
 
+def list_users_by_account_type(*, account_type: str) -> list[dict]:
+    normalized_account_type = account_type.strip().lower()
+    if normalized_account_type not in {"admin", "rpm", "lc"}:
+        return []
+
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, first_name
+    FROM users
+    WHERE account_type = ?
+    ORDER BY first_name COLLATE NOCASE ASC, id ASC
+    """,
+        (normalized_account_type,),
+    )
+    rows = cursor.fetchall()
+    connection.close()
+    return [{"id": row["id"], "name": row["first_name"]} for row in rows]
+
+
+def list_all_users() -> list[dict]:
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, username, first_name, account_type
+    FROM users
+    ORDER BY username COLLATE NOCASE ASC, id ASC
+    """
+    )
+    rows = cursor.fetchall()
+    connection.close()
+    return [dict(row) for row in rows]
+
+
+def update_user_account_type_by_id(*, user_id: str, account_type: str) -> bool:
+    normalized_account_type = account_type.strip().lower()
+    if normalized_account_type not in {"admin", "rpm", "lc"}:
+        raise ValueError("Invalid account_type")
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT 1
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+    """,
+        (user_id,),
+    )
+    if cursor.fetchone() is None:
+        connection.close()
+        return False
+
+    cursor.execute(
+        """
+    UPDATE users
+    SET account_type = ?
+    WHERE id = ?
+    """,
+        (normalized_account_type, user_id),
+    )
+    connection.commit()
+    connection.close()
+    return True
+
+
+def delete_user_by_id(*, user_id: str) -> bool:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    DELETE FROM users
+    WHERE id = ?
+    """,
+        (user_id,),
+    )
+    deleted = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return deleted
+
+
 def update_user(
     username: str,
     first_name: str = "",

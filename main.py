@@ -7,6 +7,7 @@ from core.logging_config import setup_logging
 from core.placement_notifications import placement_notification_hub
 from repositories.admin import initialize_db
 from routers import (
+    admin,
     auth,
     feedback,
     misc,
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(admin.router, dependencies=[Depends(get_current_user)])
 app.include_router(students.router, dependencies=[Depends(get_current_user)])
 app.include_router(misc.router, dependencies=[Depends(get_current_user)])
 app.include_router(users.router, dependencies=[Depends(get_current_user)])

@@ -43,6 +43,7 @@ def _parse_states(states_raw: str) -> list[str]:
 
 def _to_signup_dict(row: sqlite3.Row, auth_code: str | None = None) -> dict:
     item = dict(row)
+    stored_auth_code = auth_code if auth_code is not None else item.get("auth_code")
     payload = {
         "id": item["id"],
         "first_name": item["first_name"],
@@ -54,9 +55,9 @@ def _to_signup_dict(row: sqlite3.Row, auth_code: str | None = None) -> dict:
         "submitter_id": item["submitter_id"],
         "created_at": item["created_at"],
         "used_at": item["used_at"],
+        "auth_code": stored_auth_code,
+        "notes_text": item.get("notes"),
     }
-    if auth_code is not None:
-        payload["auth_code"] = auth_code
     return payload
 
 
@@ -89,17 +90,21 @@ def create_signup_request(
                 last_name,
                 email,
                 states,
+                notes,
+                auth_code,
                 auth_code_hash,
                 account_type,
                 submitter_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     first_name,
                     last_name,
                     email,
                     states_json,
+                    None,
+                    auth_code,
                     auth_code_hash,
                     normalized_type,
                     submitter_id,
@@ -111,7 +116,7 @@ def create_signup_request(
             cursor.execute(
                 """
             SELECT id, first_name, last_name, email, states, account_type, code_used,
-                   submitter_id, created_at, used_at
+                   submitter_id, created_at, used_at, auth_code, notes
             FROM user_signup
             WHERE id = ?
             """,
@@ -140,7 +145,7 @@ def list_signup_requests_for_user(*, requester_id: str, requester_role: str) -> 
         cursor.execute(
             """
         SELECT id, first_name, last_name, email, states, account_type, code_used,
-               submitter_id, created_at, used_at
+               submitter_id, created_at, used_at, auth_code, notes
         FROM user_signup
         ORDER BY id DESC
         """
@@ -149,7 +154,7 @@ def list_signup_requests_for_user(*, requester_id: str, requester_role: str) -> 
         cursor.execute(
             """
         SELECT id, first_name, last_name, email, states, account_type, code_used,
-               submitter_id, created_at, used_at
+               submitter_id, created_at, used_at, auth_code, notes
         FROM user_signup
         WHERE submitter_id = ?
         ORDER BY id DESC
@@ -169,7 +174,7 @@ def get_unused_signup_by_code(code: str) -> dict | None:
     cursor.execute(
         """
     SELECT id, first_name, last_name, email, states, account_type, code_used,
-           submitter_id, created_at, used_at
+           submitter_id, created_at, used_at, auth_code, notes
     FROM user_signup
     WHERE auth_code_hash = ?
       AND code_used = 0
@@ -202,3 +207,98 @@ def mark_signup_code_used(signup_id: int) -> bool:
     connection.commit()
     connection.close()
     return updated
+
+
+def update_signup_request_for_user(
+    *,
+    signup_id: int,
+    requester_id: str,
+    requester_role: str,
+    states: list[str] | None,
+    notes_text: str | None,
+    update_states: bool,
+    update_notes: bool,
+) -> dict | None:
+    if update_states is False and update_notes is False:
+        return None
+
+    normalized_role = requester_role.strip().lower()
+
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+
+    if normalized_role == "admin":
+        cursor.execute(
+            """
+        SELECT id
+        FROM user_signup
+        WHERE id = ?
+        LIMIT 1
+        """,
+            (signup_id,),
+        )
+    else:
+        cursor.execute(
+            """
+        SELECT id
+        FROM user_signup
+        WHERE id = ?
+          AND submitter_id = ?
+        LIMIT 1
+        """,
+            (signup_id, requester_id),
+        )
+
+    if cursor.fetchone() is None:
+        connection.close()
+        return None
+
+    updates: list[str] = []
+    params: list[object] = []
+
+    if update_states:
+        updates.append("states = ?")
+        params.append(json.dumps(states if states is not None else []))
+
+    if update_notes:
+        updates.append("notes = ?")
+        params.append(notes_text if notes_text is not None else "")
+
+    update_query = f"UPDATE user_signup SET {', '.join(updates)} WHERE id = ?"
+    params.append(signup_id)
+    if normalized_role != "admin":
+        update_query += " AND submitter_id = ?"
+        params.append(requester_id)
+
+    cursor.execute(update_query, tuple(params))
+    connection.commit()
+
+    if normalized_role == "admin":
+        cursor.execute(
+            """
+        SELECT id, first_name, last_name, email, states, account_type, code_used,
+               submitter_id, created_at, used_at, auth_code, notes
+        FROM user_signup
+        WHERE id = ?
+        LIMIT 1
+        """,
+            (signup_id,),
+        )
+    else:
+        cursor.execute(
+            """
+        SELECT id, first_name, last_name, email, states, account_type, code_used,
+               submitter_id, created_at, used_at, auth_code, notes
+        FROM user_signup
+        WHERE id = ?
+          AND submitter_id = ?
+        LIMIT 1
+        """,
+            (signup_id, requester_id),
+        )
+
+    row = cursor.fetchone()
+    connection.close()
+    if row is None:
+        return None
+    return _to_signup_dict(row=row)
