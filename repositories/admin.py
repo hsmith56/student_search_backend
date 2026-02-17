@@ -18,7 +18,8 @@ def initialize_db() -> None:
         first_name TEXT NOT NULL,
         favorites TEXT,
         account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc')),
-        "placing_states" TEXT
+        "placing_states" TEXT,
+        submitter_id TEXT
     )
     """
     )
@@ -244,6 +245,13 @@ def initialize_db() -> None:
             """
         ALTER TABLE users
         ADD COLUMN "placing_states" TEXT
+        """
+        )
+    if "submitter_id" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN submitter_id TEXT
         """
         )
 

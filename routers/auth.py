@@ -242,6 +242,7 @@ def register_user(user: CreateUserRequest):
         favorites=[],
         account_type=signup["account_type"],
         placing_states=signup["states"],
+        submitter_id=signup["submitter_id"] if signup["account_type"] == "lc" else None,
     )
 
     created_user = read_user(username=user.username)

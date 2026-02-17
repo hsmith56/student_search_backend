@@ -16,6 +16,7 @@ def create_user(
     favorites=None,
     account_type: str = "lc",
     placing_states: list[str] | str | None = None,
+    submitter_id: str | None = None,
 ) -> None:
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
@@ -40,9 +41,10 @@ def create_user(
             first_name,
             favorites,
             account_type,
-            "placing_states"
+            "placing_states",
+            submitter_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 user_id,
@@ -52,6 +54,7 @@ def create_user(
                 favorites_str,
                 account_type,
                 placing_states_str,
+                submitter_id,
             ),
         )
         connection.commit()
@@ -121,6 +124,77 @@ def list_all_users() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _parse_placing_states(placing_states_raw: str | None) -> list[str]:
+    if not placing_states_raw:
+        return []
+
+    try:
+        parsed = json.loads(placing_states_raw)
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(parsed, list):
+        return [str(item) for item in parsed]
+    return []
+
+
+def list_all_users_with_states() -> list[dict]:
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, username, first_name, account_type, "placing_states", submitter_id
+    FROM users
+    ORDER BY username COLLATE NOCASE ASC, id ASC
+    """
+    )
+    rows = cursor.fetchall()
+    connection.close()
+
+    users: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        users.append(
+            {
+                "id": item["id"],
+                "username": item["username"],
+                "first_name": item["first_name"],
+                "account_type": item["account_type"],
+                "placing_states": _parse_placing_states(item.get("placing_states")),
+                "submitter_id": item.get("submitter_id"),
+            }
+        )
+    return users
+
+
+def get_user_with_states_by_id(*, user_id: str) -> dict | None:
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT id, username, first_name, account_type, "placing_states", submitter_id
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+    """,
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    connection.close()
+    if row is None:
+        return None
+
+    item = dict(row)
+    return {
+        "id": item["id"],
+        "username": item["username"],
+        "first_name": item["first_name"],
+        "account_type": item["account_type"],
+        "placing_states": _parse_placing_states(item.get("placing_states")),
+        "submitter_id": item.get("submitter_id"),
+    }
+
+
 def update_user_account_type_by_id(*, user_id: str, account_type: str) -> bool:
     normalized_account_type = account_type.strip().lower()
     if normalized_account_type not in {"admin", "rpm", "lc"}:
@@ -175,7 +249,7 @@ def update_user(
     first_name: str = "",
     favorites=None,
     account_type: str | None = None,
-    placing_states: str | None = None,
+    placing_states: list[str] | None = None,
 ) -> None:
     connection = get_connection()
     cursor = connection.cursor()
@@ -213,6 +287,43 @@ def update_user(
         )
     connection.commit()
     connection.close()
+
+
+def update_user_placing_states_by_id(*, user_id: str, states: list[str]) -> bool:
+    serialized_states = json.dumps([str(state) for state in states])
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    UPDATE users
+    SET "placing_states" = ?
+    WHERE id = ?
+    """,
+        (serialized_states, user_id),
+    )
+    updated = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return updated
+
+
+def update_user_submitter_id_by_id(
+    *, user_id: str, submitter_id: str | None
+) -> bool:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    UPDATE users
+    SET submitter_id = ?
+    WHERE id = ?
+    """,
+        (submitter_id, user_id),
+    )
+    updated = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return updated
 
 
 def delete_user(username) -> None:

@@ -209,6 +209,22 @@ def mark_signup_code_used(signup_id: int) -> bool:
     return updated
 
 
+def delete_signup_request_by_id(*, signup_id: int) -> bool:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    DELETE FROM user_signup
+    WHERE id = ?
+    """,
+        (signup_id,),
+    )
+    deleted = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return deleted
+
+
 def update_signup_request_for_user(
     *,
     signup_id: int,
