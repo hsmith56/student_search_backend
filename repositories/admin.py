@@ -23,6 +23,38 @@ def initialize_db() -> None:
     """
     )
 
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS user_signup (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT,
+        states TEXT NOT NULL,
+        auth_code_hash TEXT NOT NULL UNIQUE,
+        account_type TEXT NOT NULL CHECK (account_type IN ('lc', 'rpm')),
+        code_used INTEGER NOT NULL DEFAULT 0 CHECK (code_used IN (0,1)),
+        submitter_id TEXT NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        used_at TIMESTAMP
+    )
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_user_signup_submitter
+    ON user_signup(submitter_id);
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_user_signup_code_used
+    ON user_signup(code_used, created_at DESC);
+    """
+    )
+
 
 
     cursor.execute(

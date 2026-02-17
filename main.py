@@ -13,6 +13,7 @@ from routers import (
     news_feed,
     notifications,
     placement_metrics,
+    rpm,
     students,
     users,
 )
@@ -38,6 +39,7 @@ app.include_router(news_feed.router, dependencies=[Depends(get_current_user)])
 app.include_router(
     placement_metrics.router, dependencies=[Depends(get_current_user)]
 )
+app.include_router(rpm.router, dependencies=[Depends(get_current_user)])
 app.include_router(notifications.router)
 
 

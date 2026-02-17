@@ -3,12 +3,11 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 import datetime
 import hashlib
-import secrets
 import uuid
 from pydantic import BaseModel
 
-from core.config import settings
 from repositories.users import create_user, read_user
+from repositories.user_signup import get_unused_signup_by_code, mark_signup_code_used
 
 SESSION_COOKIE_NAME = "session_id"
 sessions = {}  # still OK to keep in-memory sessions for simplicity
@@ -27,15 +26,6 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password, hashed_password) -> Any:
     return hash_password(password=plain_password) == hashed_password
-
-
-def verify_signup_code(provided_code: str, configured_code: str) -> bool:
-    # Supports hashed values (legacy behavior) and plain values from env.
-    if configured_code == "":
-        return False
-    if verify_password(provided_code, configured_code):
-        return True
-    return secrets.compare_digest(provided_code, configured_code)
 
 
 def create_session(username: str, user_id: str, first_name: str) -> str:
@@ -236,33 +226,30 @@ class CreateUserRequest(BaseModel):
 
 @router.post(path="/register")
 def register_user(user: CreateUserRequest):
-    account_type = None
-    rpm_signup_code = settings.rpm_signup_code.strip()
-    lc_signup_code = settings.lc_signup_code.strip()
-
-    if rpm_signup_code == "" and lc_signup_code == "":
-        raise HTTPException(
-            status_code=500, detail="Signup codes are not configured on the server"
-        )
-
-    if verify_signup_code(provided_code=user.code, configured_code=rpm_signup_code):
-        account_type = "rpm"
-    elif verify_signup_code(provided_code=user.code, configured_code=lc_signup_code):
-        account_type = "lc"
-
-    if account_type is None:
-        raise HTTPException(status_code=401, detail="Invalid signup code provided")
-
     existing = read_user(username=user.username)
 
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
+
+    signup = get_unused_signup_by_code(code=user.code)
+    if signup is None:
+        raise HTTPException(status_code=401, detail="Invalid signup code provided")
 
     create_user(
         username=user.username,
         password=user.password,
         first_name=user.first_name,
         favorites=[],
-        account_type=account_type,
+        account_type=signup["account_type"],
+        placing_states=signup["states"],
     )
+
+    created_user = read_user(username=user.username)
+    if created_user is None:
+        raise HTTPException(status_code=500, detail="Failed to create user")
+
+    marked = mark_signup_code_used(signup_id=int(signup["id"]))
+    if marked is False:
+        raise HTTPException(status_code=500, detail="Failed to mark signup code used")
+
     return {"message": f"User '{user.username}' created successfully"}

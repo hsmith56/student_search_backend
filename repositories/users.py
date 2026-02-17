@@ -15,13 +15,16 @@ def create_user(
     first_name,
     favorites=None,
     account_type: str = "lc",
-    placing_states: str | None = None,
+    placing_states: list[str] | str | None = None,
 ) -> None:
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
     favorites_str = None
     if favorites is not None and isinstance(favorites, list):
         favorites_str = json.dumps(favorites)
+    placing_states_str = placing_states
+    if placing_states is not None and isinstance(placing_states, list):
+        placing_states_str = json.dumps(placing_states)
     if account_type not in {"admin", "rpm", "lc"}:
         account_type = "lc"
 
@@ -48,7 +51,7 @@ def create_user(
                 first_name,
                 favorites_str,
                 account_type,
-                placing_states,
+                placing_states_str,
             ),
         )
         connection.commit()
