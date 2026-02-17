@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import sys
 from pathlib import Path
 from typing import Iterable
 
-import nltk
+import time
+
+import numpy as np
+import language_tool_python
 from rapidfuzz import fuzz
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.summarizers.lex_rank import LexRankSummarizer
-from sumy.summarizers.lsa import LsaSummarizer
 
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
@@ -23,7 +23,13 @@ from models.student import FullStudent
 from repositories.students import get_full_student_by_id
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-MAX_SENTENCE_CHARS = 220
+WORD_RE = re.compile(r"[A-Za-z0-9']+")
+MAX_SENTENCE_CHARS = 360
+
+_GRAMMAR_CLEAN_ENABLED = False
+_GRAMMAR_TOOL: language_tool_python.LanguageTool | None = None
+_GRAMMAR_TOOL_FAILED = False
+_GRAMMAR_TOOL_WARNED = False
 
 
 def _clean_text(value: str | None) -> str:
@@ -141,6 +147,56 @@ def _normalize_quote(sentence: str) -> str:
     return cleaned
 
 
+def _get_grammar_tool() -> language_tool_python.LanguageTool | None:
+    global _GRAMMAR_TOOL, _GRAMMAR_TOOL_FAILED, _GRAMMAR_TOOL_WARNED
+    if not _GRAMMAR_CLEAN_ENABLED:
+        return None
+    if _GRAMMAR_TOOL is not None:
+        return _GRAMMAR_TOOL
+    if _GRAMMAR_TOOL_FAILED:
+        return None
+
+    try:
+        _GRAMMAR_TOOL = language_tool_python.LanguageTool("en-US")
+    except Exception as exc:
+        _GRAMMAR_TOOL_FAILED = True
+        if not _GRAMMAR_TOOL_WARNED:
+            print(
+                f"Grammar cleanup unavailable ({exc.__class__.__name__}: {exc}). Continuing without it.",
+                file=sys.stderr,
+            )
+            _GRAMMAR_TOOL_WARNED = True
+        return None
+    return _GRAMMAR_TOOL
+
+
+def _grammar_correct_quote(text: str) -> str:
+    normalized = _normalize_quote(text)
+    if normalized == "" or not _GRAMMAR_CLEAN_ENABLED:
+        return normalized
+
+    tool = _get_grammar_tool()
+    if tool is None:
+        return normalized
+
+    try:
+        corrected = tool.correct(normalized).strip()
+    except Exception:
+        return normalized
+    return _normalize_quote(corrected)
+
+
+def _shutdown_grammar_tool() -> None:
+    global _GRAMMAR_TOOL
+    if _GRAMMAR_TOOL is None:
+        return
+    try:
+        _GRAMMAR_TOOL.close()
+    except Exception:
+        pass
+    _GRAMMAR_TOOL = None
+
+
 def _subject_pronoun(student: FullStudent) -> str:
     return "She" if "female" in _clean_text(student.gender_desc).lower() else "He"
 
@@ -250,7 +306,7 @@ def _best_sentence_from_pool(pool: list[str], preferred: list[str], query: str) 
             default=0.0,
         )
         query_score = float(fuzz.token_set_ratio(sentence, query)) if query else 0.0
-        score = (pref_score * 0.65) + (query_score * 0.35) + (min(len(sentence), 170) / 60)
+        score = (pref_score * 0.65) + (query_score * 0.35) + (min(len(sentence), 320) / 110)
         if score > best_score:
             best_sentence = sentence
             best_score = score
@@ -261,7 +317,7 @@ def _top_unique_quotes(pool: list[str], query: str, count: int = 3) -> list[str]
     scored: list[tuple[float, str]] = []
     for sentence in pool:
         query_score = float(fuzz.token_set_ratio(sentence, query)) if query else 0.0
-        score = query_score + (min(len(sentence), 170) / 55)
+        score = query_score + (min(len(sentence), 320) / 100)
         scored.append((score, sentence))
     ranked = sorted(scored, key=lambda pair: pair[0], reverse=True)
 
@@ -327,23 +383,126 @@ def _render_summary_with_quotes(
     subject = _subject_pronoun(student)
     possessive = _possessive_pronoun(student)
     final_student_quote = student_quote or f"{subject} is eager to learn from a host-family experience."
+    final_student_quote = _grammar_correct_quote(final_student_quote)
+    final_parent_quote = _grammar_correct_quote(parent_quote) if parent_quote else ""
     parts = [_facts_sentence(student), _interest_sentence(student), f"{subject} says: '{final_student_quote}'"]
-    if parent_quote:
-        parts.append(f"{possessive} parents say: '{parent_quote}'")
+    if final_parent_quote:
+        parts.append(f"{possessive} parents say: '{final_parent_quote}'")
     return " ".join(parts)
 
 
-def _ensure_nltk_data() -> None:
-    for resource in ("punkt", "punkt_tab"):
-        try:
-            nltk.data.find(f"tokenizers/{resource}")
-        except LookupError:
-            nltk.download(resource, quiet=True)
+def _sentence_terms(sentence: str) -> list[str]:
+    return [token.lower() for token in WORD_RE.findall(sentence) if len(token) > 1]
 
 
-def _build_summary_with_sumy(
+def _lexrank_extract(sentences: list[str], sentence_count: int = 2) -> list[str]:
+    if not sentences:
+        return []
+
+    tokenized = [_sentence_terms(sentence) for sentence in sentences]
+    sentence_sets = [tokens for tokens in tokenized if tokens]
+    if not sentence_sets:
+        return sentences[:sentence_count]
+
+    n = len(sentences)
+    tf_metrics: list[dict[str, float]] = []
+    for tokens in tokenized:
+        counts: dict[str, int] = {}
+        for token in tokens:
+            counts[token] = counts.get(token, 0) + 1
+        max_tf = max(counts.values()) if counts else 1
+        tf_metrics.append({term: tf / max_tf for term, tf in counts.items()})
+
+    idf_metrics: dict[str, float] = {}
+    for tokens in tokenized:
+        unique_terms = set(tokens)
+        for term in unique_terms:
+            if term not in idf_metrics:
+                n_j = sum(1 for sentence_tokens in tokenized if term in sentence_tokens)
+                idf_metrics[term] = math.log(n / (1 + n_j)) if n > 0 else 0.0
+
+    matrix = np.zeros((n, n), dtype=float)
+    degrees = np.zeros((n,), dtype=float)
+    threshold = 0.1
+
+    for row in range(n):
+        terms_row = set(tokenized[row])
+        tf_row = tf_metrics[row]
+        for col in range(n):
+            terms_col = set(tokenized[col])
+            tf_col = tf_metrics[col]
+            common = terms_row & terms_col
+            numerator = sum(tf_row.get(term, 0.0) * tf_col.get(term, 0.0) * (idf_metrics.get(term, 0.0) ** 2) for term in common)
+
+            denom_row = sum((tf_row.get(term, 0.0) * idf_metrics.get(term, 0.0)) ** 2 for term in terms_row)
+            denom_col = sum((tf_col.get(term, 0.0) * idf_metrics.get(term, 0.0)) ** 2 for term in terms_col)
+
+            similarity = 0.0
+            if denom_row > 0 and denom_col > 0:
+                similarity = numerator / (math.sqrt(denom_row) * math.sqrt(denom_col))
+
+            if similarity > threshold:
+                matrix[row, col] = 1.0
+                degrees[row] += 1.0
+
+    for row in range(n):
+        if degrees[row] == 0:
+            degrees[row] = 1.0
+        matrix[row, :] = matrix[row, :] / degrees[row]
+
+    p = np.array([1.0 / n] * n, dtype=float)
+    epsilon = 0.1
+    delta = 1.0
+    transposed = matrix.T
+    while delta > epsilon:
+        next_p = np.dot(transposed, p)
+        norm = np.linalg.norm(next_p)
+        if norm > 0:
+            next_p = next_p / norm
+        delta = np.linalg.norm(next_p - p)
+        p = next_p
+
+    ranked_indices = np.argsort(-p)[: min(sentence_count, n)]
+    ranked_set = set(int(idx) for idx in ranked_indices)
+    return [sentence for idx, sentence in enumerate(sentences) if idx in ranked_set]
+
+
+def _lsa_extract(sentences: list[str], sentence_count: int = 2) -> list[str]:
+    if not sentences:
+        return []
+
+    tokenized = [_sentence_terms(sentence) for sentence in sentences]
+    vocab: dict[str, int] = {}
+    for tokens in tokenized:
+        for token in tokens:
+            if token not in vocab:
+                vocab[token] = len(vocab)
+
+    if not vocab:
+        return sentences[:sentence_count]
+
+    term_sentence = np.zeros((len(vocab), len(sentences)), dtype=float)
+    for col, tokens in enumerate(tokenized):
+        for token in tokens:
+            term_sentence[vocab[token], col] += 1.0
+
+    if term_sentence.size == 0:
+        return sentences[:sentence_count]
+
+    _, singular_values, vt = np.linalg.svd(term_sentence, full_matrices=False)
+    if len(singular_values) == 0:
+        return sentences[:sentence_count]
+
+    dimensions = max(1, min(3, len(singular_values)))
+    salience = np.sqrt((vt[:dimensions, :] ** 2).sum(axis=0))
+    ranked_indices = np.argsort(-salience)[: min(sentence_count, len(sentences))]
+    ranked_set = set(int(idx) for idx in ranked_indices)
+    return [sentence for idx, sentence in enumerate(sentences) if idx in ranked_set]
+
+
+def _build_summary_with_algorithm(
     student: FullStudent,
-    summarizer,
+    extract_fn,
     sentence_count: int = 2,
     parent_variant: int = 0,
 ) -> str:
@@ -354,13 +513,15 @@ def _build_summary_with_sumy(
             student_quote = _normalize_quote(_highest_signal_sentence(student))
         return _render_summary_with_quotes(student, student_quote, parent_quote)
 
-    _ensure_nltk_data()
-    parser = PlaintextParser.from_string("\n".join(candidates), Tokenizer("english"))
-    summary_items = [str(sentence) for sentence in summarizer(parser.document, sentence_count)]
+    summary_items = extract_fn(candidates, sentence_count=sentence_count)
     if not summary_items:
         summary_items = [_highest_signal_sentence(student)]
 
-    cleaned = [_normalize_quote(s) for s in summary_items if _normalize_quote(s)]
+    cleaned: list[str] = []
+    for sentence in summary_items:
+        normalized = _normalize_quote(sentence)
+        if normalized:
+            cleaned.append(normalized)
     student_quote, parent_quote = _select_quotes(student, cleaned, parent_variant=parent_variant)
     if student_quote == "" and cleaned:
         student_quote = cleaned[0]
@@ -368,11 +529,11 @@ def _build_summary_with_sumy(
 
 
 def build_Result1_lexrank(student: FullStudent) -> str:
-    return _build_summary_with_sumy(student, LexRankSummarizer(), parent_variant=2)
+    return _build_summary_with_algorithm(student, _lexrank_extract, parent_variant=2)
 
 
 def build_Result2_lsa(student: FullStudent) -> str:
-    return _build_summary_with_sumy(student, LsaSummarizer(), parent_variant=3)
+    return _build_summary_with_algorithm(student, _lsa_extract, parent_variant=3)
 
 
 def Result1_summary(app_id: int) -> str:
@@ -394,22 +555,34 @@ def _parse_args() -> argparse.Namespace:
         description="Standalone Result1/Result2 student summary generator."
     )
     parser.add_argument("--appid", type=int, required=True, help="Student application id.")
+    parser.add_argument(
+        "--grammar-clean",
+        action="store_true",
+        help="Apply offline grammar cleanup to selected quotes using LanguageTool.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
+    global _GRAMMAR_CLEAN_ENABLED
     args = _parse_args()
-    try:
-        summary1 = Result1_summary(args.appid)
-        summary2 = Result2_summary(args.appid)
-    except ValueError as exc:
-        print(str(exc))
-        return 1
-
+    _GRAMMAR_CLEAN_ENABLED = bool(args.grammar_clean)
     student = get_full_student_by_id(args.appid)
     if student is None:
         print(f"No FullStudent found for app_id={args.appid}.")
         return 1
+
+    try:
+        start = time.perf_counter()
+        summary1 = build_Result1_lexrank(student)
+        summary2 = build_Result2_lsa(student)
+        end = time.perf_counter()
+        print(f"Total tile after imports - {end-start}")
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    finally:
+        _shutdown_grammar_tool()
 
     print("Student Summary (Result1 + Result2)")
     print(f"app_id={student.app_id} | first_name={student.first_name} | country={student.country}")
