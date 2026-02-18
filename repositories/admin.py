@@ -19,6 +19,11 @@ def initialize_db() -> None:
         favorites TEXT,
         account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc')),
         "placing_states" TEXT,
+        email TEXT,
+        last_name TEXT,
+        manager_id TEXT,
+        signup_code TEXT,
+        is_registered INTEGER NOT NULL DEFAULT 1 CHECK (is_registered IN (0,1)),
         submitter_id TEXT
     )
     """
@@ -254,6 +259,41 @@ def initialize_db() -> None:
         ADD COLUMN submitter_id TEXT
         """
         )
+    if "email" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN email TEXT
+        """
+        )
+    if "last_name" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN last_name TEXT
+        """
+        )
+    if "manager_id" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN manager_id TEXT
+        """
+        )
+    if "signup_code" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN signup_code TEXT
+        """
+        )
+    if "is_registered" not in user_columns:
+        cursor.execute(
+            """
+        ALTER TABLE users
+        ADD COLUMN is_registered INTEGER NOT NULL DEFAULT 1 CHECK (is_registered IN (0,1))
+        """
+        )
 
     cursor.execute(
         """
@@ -261,6 +301,35 @@ def initialize_db() -> None:
     SET account_type = 'lc'
     WHERE account_type IS NULL
       OR account_type NOT IN ('admin', 'rpm', 'lc')
+    """
+    )
+    cursor.execute(
+        """
+    UPDATE users
+    SET is_registered = 1
+    WHERE is_registered IS NULL
+       OR is_registered NOT IN (0, 1)
+    """
+    )
+    cursor.execute(
+        """
+    UPDATE users
+    SET manager_id = submitter_id
+    WHERE manager_id IS NULL
+      AND submitter_id IS NOT NULL
+    """
+    )
+    cursor.execute(
+        """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_signup_code_unique
+    ON users(signup_code)
+    WHERE signup_code IS NOT NULL
+    """
+    )
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_users_manager_id
+    ON users(manager_id)
     """
     )
 
@@ -290,6 +359,24 @@ def initialize_db() -> None:
         ADD COLUMN lc_auth_code TEXT
         """
         )
+
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS user_notes (
+        owner_id TEXT NOT NULL,
+        notes_user_id TEXT NOT NULL,
+        note_text TEXT NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (owner_id, notes_user_id)
+    )
+    """
+    )
+    cursor.execute(
+        """
+    CREATE INDEX IF NOT EXISTS idx_user_notes_target
+    ON user_notes(notes_user_id)
+    """
+    )
 
     connection.commit()
     connection.close()

@@ -6,8 +6,11 @@ import hashlib
 import uuid
 from pydantic import BaseModel
 
-from repositories.users import create_user, read_user
-from repositories.user_signup import get_unused_signup_by_code, mark_signup_code_used
+from repositories.users import (
+    complete_signup_registration,
+    get_pending_user_by_signup_code,
+    read_user,
+)
 
 SESSION_COOKIE_NAME = "session_id"
 sessions = {}  # still OK to keep in-memory sessions for simplicity
@@ -221,7 +224,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     first_name: str
-    code: str
+    signup_code: str
 
 
 @router.post(path="/register")
@@ -231,26 +234,25 @@ def register_user(user: CreateUserRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    signup = get_unused_signup_by_code(code=user.code)
+    signup = get_pending_user_by_signup_code(signup_code=user.signup_code)
     if signup is None:
         raise HTTPException(status_code=401, detail="Invalid signup code provided")
 
-    create_user(
-        username=user.username,
-        password=user.password,
-        first_name=user.first_name,
-        favorites=[],
-        account_type=signup["account_type"],
-        placing_states=signup["states"],
-        submitter_id=signup["submitter_id"] if signup["account_type"] == "lc" else None,
-    )
+    try:
+        completed = complete_signup_registration(
+            user_id=str(signup["id"]),
+            username=user.username,
+            password=user.password,
+            first_name=user.first_name,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to complete registration: {exc}")
 
-    created_user = read_user(username=user.username)
+    if completed is False:
+        raise HTTPException(status_code=401, detail="Invalid signup code provided")
+
+    created_user = read_user(user_id=str(signup["id"]))
     if created_user is None:
         raise HTTPException(status_code=500, detail="Failed to create user")
-
-    marked = mark_signup_code_used(signup_id=int(signup["id"]))
-    if marked is False:
-        raise HTTPException(status_code=500, detail="Failed to mark signup code used")
 
     return {"message": f"User '{user.username}' created successfully"}
