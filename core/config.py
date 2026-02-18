@@ -94,6 +94,16 @@ class Settings:
         self.beacon_password = os.getenv("BEACON_PASSWORD") or os.getenv(
             "beacon_password", ""
         )
+        self.smtp_user = os.getenv("SMTP_USER", "")
+        self.smtp_pass = os.getenv("SMTP_PASS", "")
+        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.smtp_port = _to_int(os.getenv("SMTP_PORT"), default=465)
+        self.smtp_timeout_seconds = _to_int(
+            os.getenv("SMTP_TIMEOUT_SECONDS"), default=30
+        )
+        self.signup_invite_url = os.getenv(
+            "SIGNUP_INVITE_URL", "https://www.websitename.com/login"
+        )
         self.rpm_signup_code = os.getenv("RPM_SIGNUP_CODE", "")
         self.lc_signup_code = os.getenv("LC_SIGNUP_CODE", "")
 

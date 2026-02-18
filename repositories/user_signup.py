@@ -167,6 +167,44 @@ def list_signup_requests_for_user(*, requester_id: str, requester_role: str) -> 
     return [_to_signup_dict(row=row) for row in rows]
 
 
+def get_signup_request_for_user(
+    *, signup_id: int, requester_id: str, requester_role: str
+) -> dict | None:
+    normalized_role = requester_role.strip().lower()
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+
+    if normalized_role == "admin":
+        cursor.execute(
+            """
+        SELECT id, first_name, last_name, email, states, account_type, code_used,
+               submitter_id, created_at, used_at, auth_code, notes
+        FROM user_signup
+        WHERE id = ?
+        LIMIT 1
+        """,
+            (signup_id,),
+        )
+    else:
+        cursor.execute(
+            """
+        SELECT id, first_name, last_name, email, states, account_type, code_used,
+               submitter_id, created_at, used_at, auth_code, notes
+        FROM user_signup
+        WHERE id = ?
+          AND submitter_id = ?
+        LIMIT 1
+        """,
+            (signup_id, requester_id),
+        )
+
+    row = cursor.fetchone()
+    connection.close()
+    if row is None:
+        return None
+    return _to_signup_dict(row=row)
+
+
 def get_unused_signup_by_code(code: str) -> dict | None:
     code_hash = hash_signup_code(code=code)
     connection = get_connection(row_factory=True)

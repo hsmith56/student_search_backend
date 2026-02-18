@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,6 +7,7 @@ from pydantic import BaseModel, Field
 from repositories.user_signup import (
     create_signup_request,
     delete_signup_request_by_id,
+    get_signup_request_for_user,
     list_signup_requests_for_user,
     update_signup_request_for_user,
 )
@@ -16,8 +18,10 @@ from repositories.users import (
     read_user,
 )
 from routers.auth import get_current_user
+from utils.signup_email import send_signup_invitation_email
 
 router: APIRouter = APIRouter(prefix="/rpm", tags=["rpm"])
+logger = logging.getLogger(__name__)
 
 
 def _require_rpm_or_admin(current_user: dict) -> None:
@@ -97,20 +101,85 @@ def create_rpm_signup_request(
     current_user: dict = Depends(get_current_user),
 ) -> SignupRequestCreated:
     _require_rpm_or_admin(current_user=current_user)
+    normalized_email = (
+        payload.email.strip() if isinstance(payload.email, str) else None
+    )
+
+    if normalized_email == "":
+        normalized_email = None
+
     try:
         created = create_signup_request(
             first_name=payload.first_name.strip(),
             last_name=payload.last_name.strip(),
-            email=payload.email.strip() if isinstance(payload.email, str) else None,
+            email=normalized_email,
             states=payload.states,
             account_type=payload.account_type,
             submitter_id=current_user["id"],
         )
+
+        if normalized_email is not None:
+            email_sent = send_signup_invitation_email(
+                recipient_email=normalized_email,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                signup_code=created["auth_code"],
+            )
+            if email_sent is False:
+                logger.warning(
+                    "Signup request %s created, but invitation email was not sent",
+                    created["id"],
+                )
+
         return SignupRequestCreated(**created)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(path="/register/{signup_id}/resend-invitation")
+def resend_rpm_signup_invitation(
+    signup_id: int,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, str]:
+    _require_rpm_or_admin(current_user=current_user)
+
+    signup = get_signup_request_for_user(
+        signup_id=signup_id,
+        requester_id=current_user["id"],
+        requester_role=current_user["account_type"],
+    )
+    if signup is None:
+        raise HTTPException(status_code=404, detail="Signup request not found")
+
+    recipient_email = signup.get("email")
+    if isinstance(recipient_email, str) is False or recipient_email.strip() == "":
+        raise HTTPException(
+            status_code=400,
+            detail="Signup request does not have an email address",
+        )
+
+    if signup["code_used"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Signup code has already been used",
+        )
+
+    auth_code = signup.get("auth_code")
+    if isinstance(auth_code, str) is False or auth_code.strip() == "":
+        raise HTTPException(status_code=500, detail="Signup auth code is unavailable")
+
+    email_sent = send_signup_invitation_email(
+        recipient_email=recipient_email.strip(),
+        first_name=signup["first_name"],
+        last_name=signup["last_name"],
+        signup_code=auth_code,
+    )
+    if email_sent is False:
+        raise HTTPException(status_code=500, detail="Failed to send invitation email")
+
+    return {"message": "Invitation email resent successfully"}
 
 
 @router.get(path="/register", response_model=list[SignupRequestItem])
