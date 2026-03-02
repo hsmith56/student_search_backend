@@ -20,6 +20,7 @@ from utils.beacon_refresh_stage2 import (
     get_basic_information,
     get_category_mappings,
     get_placement_requests,
+    run_stage_2_multi_threaded,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,95 @@ def _get_filtered_student_app_ids(query: Optional[str]) -> list[int]:
         )
         rows = cursor.fetchall()
     return [int(row["app_id"]) for row in rows]
+
+
+def _get_filtered_stage_2_students(query: str) -> list[dict[str, Any]]:
+    like_value = f"%{query.strip().lower()}%"
+    with get_connection(row_factory=True) as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id,
+                usaHsId,
+                applicationId,
+                participantId,
+                agencyId,
+                placementStatusId,
+                placementStatusName,
+                paxNameLast,
+                paxNameFirst,
+                paxGender
+            FROM student_basic_overview
+            WHERE LOWER(COALESCE(usaHsId, '')) LIKE ?
+            ORDER BY applicationId
+            """,
+            (like_value,),
+        )
+        rows = cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+def _get_stage_2_students_with_null_usahsid() -> list[dict[str, Any]]:
+    with get_connection(row_factory=True) as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id,
+                usaHsId,
+                applicationId,
+                participantId,
+                agencyId,
+                placementStatusId,
+                placementStatusName,
+                paxNameLast,
+                paxNameFirst,
+                paxGender
+            FROM student_basic_overview
+            WHERE usaHsId IS NULL
+            ORDER BY applicationId
+            """
+        )
+        rows = cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+def _get_basic_app_ids_with_empty_usahsid() -> list[int]:
+    with get_connection(row_factory=True) as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT applicationId
+            FROM student_basic_overview
+            WHERE usaHsId IS NULL OR TRIM(usaHsId) = ''
+            ORDER BY applicationId
+            """
+        )
+        rows = cursor.fetchall()
+    return [int(row["applicationId"]) for row in rows]
+
+
+def drop_students_from_full_and_basic_by_app_ids(app_ids: list[int]) -> tuple[int, int]:
+    if len(app_ids) == 0:
+        return 0, 0
+
+    placeholders = ",".join("?" for _ in app_ids)
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            f"DELETE FROM student_full_view WHERE app_id IN ({placeholders})",
+            app_ids,
+        )
+        full_deleted_rows = cursor.rowcount
+        cursor.execute(
+            f"DELETE FROM student_basic_overview WHERE applicationId IN ({placeholders})",
+            app_ids,
+        )
+        basic_deleted_rows = cursor.rowcount
+        connection.commit()
+
+    return max(0, int(full_deleted_rows)), max(0, int(basic_deleted_rows))
 
 
 def _dedupe_states(states: list[Any]) -> list[str]:
@@ -252,7 +342,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "One-time Beacon sync for student_full_view. "
-            "Use --state to refresh states and --usahsid to refresh usahsid."
+            "Use --state to refresh states, --usahsid to refresh usahsid, "
+            "--all to run full stage_2 hydration by query, "
+            "--null to run full stage_2 for students with null usaHsId in "
+            "student_basic_overview, or --drop-and-clean to remove matching "
+            "rows from full and basic views for empty usaHsId records in basic overview."
         )
     )
     parser.add_argument(
@@ -266,10 +360,31 @@ def main() -> None:
         help="Refresh the student_full_view.usahsid field for every student.",
     )
     parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run full stage_2 hydration for students matched by --query.",
+    )
+    parser.add_argument(
+        "--null",
+        action="store_true",
+        help="Run full stage_2 hydration for students in student_basic_overview where usaHsId is null.",
+    )
+    parser.add_argument(
+        "--drop-and-clean",
+        action="store_true",
+        help=(
+            "Find students with empty usaHsId in student_basic_overview and "
+            "drop matching student rows from student_full_view and student_basic_overview."
+        ),
+    )
+    parser.add_argument(
         "--query",
         type=str,
         default=None,
-        help="Only update students whose current usahsid contains this value (case-insensitive).",
+        help=(
+            "Case-insensitive usahsid filter. "
+            "For --all, this is required and matched against student_basic_overview.usaHsId."
+        ),
     )
     parser.add_argument(
         "--threads",
@@ -279,25 +394,98 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.state and not args.usahsid:
-        parser.error("Pass at least one flag: --state or --usahsid")
+    if (
+        not args.state
+        and not args.usahsid
+        and not args.all
+        and not args.null
+        and not args.drop_and_clean
+    ):
+        parser.error(
+            "Pass at least one flag: --state, --usahsid, --all, --null, or --drop-and-clean"
+        )
+    if args.drop_and_clean and (args.state or args.usahsid or args.all or args.null):
+        parser.error(
+            "--drop-and-clean cannot be combined with --state, --usahsid, --all, or --null"
+        )
+    if args.drop_and_clean and args.query is not None and args.query.strip() != "":
+        parser.error("--drop-and-clean cannot be combined with --query")
+    if args.null and (args.state or args.usahsid or args.all):
+        parser.error("--null cannot be combined with --state, --usahsid, or --all")
+    if args.null and args.query is not None and args.query.strip() != "":
+        parser.error("--null cannot be combined with --query")
+    if args.all and (args.state or args.usahsid):
+        parser.error("--all cannot be combined with --state or --usahsid")
+    if args.all and (args.query is None or args.query.strip() == ""):
+        parser.error("Pass --query when using --all (example: --all --query PLA26526)")
 
     setup_logging()
     initialize_db()
     max_workers = max(1, int(args.threads))
+
+    logger.info(
+        "Running update script with flags state=%s usahsid=%s all=%s null=%s drop_and_clean=%s query=%s",
+        args.state,
+        args.usahsid,
+        args.all,
+        args.null,
+        args.drop_and_clean,
+        args.query,
+    )
+
+    if args.drop_and_clean:
+        basic_app_ids = _get_basic_app_ids_with_empty_usahsid()
+        logger.info(
+            "Loaded %s student_basic_overview rows with empty usaHsId",
+            len(basic_app_ids),
+        )
+        if len(basic_app_ids) == 0:
+            logger.info("No students matched the provided filter. Exiting.")
+            return
+        full_deleted_count, basic_deleted_count = (
+            drop_students_from_full_and_basic_by_app_ids(basic_app_ids)
+        )
+        logger.info(
+            "drop-and-clean complete. matched_basic_rows=%s dropped_from_full_view=%s dropped_from_basic_view=%s",
+            len(basic_app_ids),
+            full_deleted_count,
+            basic_deleted_count,
+        )
+        return
+
+    logger.info("Beacon request threads=%s", max_workers)
     _configure_beacon_client_pool(max_workers=max_workers)
     _authenticate_beacon_client()
 
+    if args.null:
+        stage_2_students = _get_stage_2_students_with_null_usahsid()
+        logger.info(
+            "Loaded %s target students from student_basic_overview with null usaHsId for stage_2",
+            len(stage_2_students),
+        )
+        if len(stage_2_students) == 0:
+            logger.info("No students matched the provided filter. Exiting.")
+            return
+        run_stage_2_multi_threaded(stage_2_students)
+        logger.info("stage_2 null update complete. processed=%s", len(stage_2_students))
+        return
+
+    if args.all:
+        stage_2_query = args.query.strip() if args.query is not None else ""
+        stage_2_students = _get_filtered_stage_2_students(stage_2_query)
+        logger.info(
+            "Loaded %s target students from student_basic_overview for stage_2",
+            len(stage_2_students),
+        )
+        if len(stage_2_students) == 0:
+            logger.info("No students matched the provided filter. Exiting.")
+            return
+        run_stage_2_multi_threaded(stage_2_students)
+        logger.info("stage_2 update complete. processed=%s", len(stage_2_students))
+        return
+
     app_ids = _get_filtered_student_app_ids(args.query)
     logger.info("Loaded %s target students from student_full_view", len(app_ids))
-    logger.info(
-        "Running update script with flags state=%s usahsid=%s query=%s",
-        args.state,
-        args.usahsid,
-        args.query,
-    )
-    logger.info("Beacon request threads=%s", max_workers)
-
     if len(app_ids) == 0:
         logger.info("No students matched the provided filter. Exiting.")
         return

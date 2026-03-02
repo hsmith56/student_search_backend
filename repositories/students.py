@@ -186,7 +186,7 @@ def int_to_bool(value: int | None) -> bool | None:
 
 def insert_full_student(student):
     sql = """
-    INSERT OR IGNORE INTO student_full_view (
+    INSERT INTO student_full_view (
         id, first_name, app_id, pax_id, country, gpa, english_score,
         applying_to_grade, usahsid, program_type, adjusted_age,
         selected_interests, urban_request, placement_status, gender_desc,
@@ -198,6 +198,42 @@ def insert_full_student(student):
         health_comments, live_with_pets, local_coordinator
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(app_id) DO UPDATE SET
+        id = excluded.id,
+        first_name = excluded.first_name,
+        pax_id = excluded.pax_id,
+        country = excluded.country,
+        gpa = excluded.gpa,
+        english_score = excluded.english_score,
+        applying_to_grade = excluded.applying_to_grade,
+        usahsid = excluded.usahsid,
+        program_type = excluded.program_type,
+        adjusted_age = excluded.adjusted_age,
+        selected_interests = excluded.selected_interests,
+        urban_request = excluded.urban_request,
+        placement_status = excluded.placement_status,
+        gender_desc = excluded.gender_desc,
+        current_grade = excluded.current_grade,
+        status = excluded.status,
+        states = excluded.states,
+        early_placement = excluded.early_placement,
+        single_placement = excluded.single_placement,
+        double_placement = excluded.double_placement,
+        free_text_interests = excluded.free_text_interests,
+        family_description = excluded.family_description,
+        favorite_subjects = excluded.favorite_subjects,
+        photo_comments = excluded.photo_comments,
+        religion = excluded.religion,
+        allergy_comments = excluded.allergy_comments,
+        dietary_restrictions = excluded.dietary_restrictions,
+        religious_frequency = excluded.religious_frequency,
+        intro_message = excluded.intro_message,
+        message_to_host_family = excluded.message_to_host_family,
+        message_from_natural_family = excluded.message_from_natural_family,
+        media_link = excluded.media_link,
+        health_comments = excluded.health_comments,
+        live_with_pets = excluded.live_with_pets,
+        local_coordinator = excluded.local_coordinator
     """
 
     student = _full_student_dict(student)
