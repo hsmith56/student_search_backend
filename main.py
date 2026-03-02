@@ -1,4 +1,6 @@
 from routers.auth import get_current_user
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +23,17 @@ from routers import (
 
 setup_logging()
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    initialize_db()
+    await placement_notification_hub.start()
+    try:
+        yield
+    finally:
+        await placement_notification_hub.stop()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,  # ty:ignore[invalid-argument-type]
@@ -43,14 +55,3 @@ app.include_router(
 )
 app.include_router(rpm.router, dependencies=[Depends(get_current_user)])
 app.include_router(notifications.router)
-
-
-@app.on_event("startup")
-async def startup_init() -> None:
-    initialize_db()
-    await placement_notification_hub.start()
-
-
-@app.on_event("shutdown")
-async def shutdown_cleanup() -> None:
-    await placement_notification_hub.stop()
