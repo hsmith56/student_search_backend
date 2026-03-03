@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import random
 import re
 import sys
 from pathlib import Path
@@ -20,13 +21,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from models.student import FullStudent
-from repositories.students import get_full_student_by_id
+from repositories.students import get_all_full_students, get_full_student_by_id
 
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 WORD_RE = re.compile(r"[A-Za-z0-9']+")
-MAX_SENTENCE_CHARS = 360
+MAX_SENTENCE_CHARS = 700
 
 _GRAMMAR_CLEAN_ENABLED = False
+_NO_QUOTE_MODE = False
 _GRAMMAR_TOOL: language_tool_python.LanguageTool | None = None
 _GRAMMAR_TOOL_FAILED = False
 _GRAMMAR_TOOL_WARNED = False
@@ -62,6 +64,23 @@ def _to_float(value: str) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_favorite_subjects(value: str | None) -> str:
+    text = _clean_text(value).strip().strip("'\"")
+    if text == "":
+        return ""
+    text = re.sub(r"^(?:my|our)\s+favorite\s+subjects?\s+are\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^favorite\s+subjects?\s*[:\-]\s*", "", text, flags=re.IGNORECASE)
+    text = text.strip(" .,:;")
+    return text
+
+
+def _random_app_id() -> int | None:
+    students = get_all_full_students()
+    if not students:
+        return None
+    return int(random.choice(students).app_id)
 
 
 def _student_narrative_blocks(student: FullStudent) -> list[str]:
@@ -147,6 +166,24 @@ def _normalize_quote(sentence: str) -> str:
     return cleaned
 
 
+def _light_cleanup_quote(text: str) -> str:
+    cleaned = _clean_text(text)
+    if cleaned == "":
+        return ""
+    cleaned = re.sub(
+        r"thank you that you are thinking about",
+        "thank you for thinking about",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\b(\d+)\s+Months\b", r"\1 months", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bi\b", "I", cleaned)
+    cleaned = re.sub(r"\s+([,.!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([,.!?])(?=[A-Za-z])", r"\1 ", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned
+
+
 def _get_grammar_tool() -> language_tool_python.LanguageTool | None:
     global _GRAMMAR_TOOL, _GRAMMAR_TOOL_FAILED, _GRAMMAR_TOOL_WARNED
     if not _GRAMMAR_CLEAN_ENABLED:
@@ -171,7 +208,7 @@ def _get_grammar_tool() -> language_tool_python.LanguageTool | None:
 
 
 def _grammar_correct_quote(text: str) -> str:
-    normalized = _normalize_quote(text)
+    normalized = _normalize_quote(_light_cleanup_quote(text))
     if normalized == "" or not _GRAMMAR_CLEAN_ENABLED:
         return normalized
 
@@ -228,7 +265,7 @@ def _interest_sentence(student: FullStudent) -> str:
         dict.fromkeys(_clean_text(item) for item in student.selected_interests if _clean_text(item))
     )
     interests = unique_interests[:4]
-    favorite_subjects = _clean_text(student.favorite_subjects)
+    favorite_subjects = _normalize_favorite_subjects(student.favorite_subjects)
     gpa = _to_float(student.gpa)
     subject = _subject_pronoun(student)
     possessive = _possessive_pronoun(student).lower()
@@ -380,14 +417,13 @@ def _select_quotes(
 def _render_summary_with_quotes(
     student: FullStudent, student_quote: str, parent_quote: str = ""
 ) -> str:
+    if _NO_QUOTE_MODE:
+        return " ".join([_facts_sentence(student), _interest_sentence(student)])
+
     subject = _subject_pronoun(student)
-    possessive = _possessive_pronoun(student)
     final_student_quote = student_quote or f"{subject} is eager to learn from a host-family experience."
     final_student_quote = _grammar_correct_quote(final_student_quote)
-    final_parent_quote = _grammar_correct_quote(parent_quote) if parent_quote else ""
     parts = [_facts_sentence(student), _interest_sentence(student), f"{subject} says: '{final_student_quote}'"]
-    if final_parent_quote:
-        parts.append(f"{possessive} parents say: '{final_parent_quote}'")
     return " ".join(parts)
 
 
@@ -506,6 +542,9 @@ def _build_summary_with_algorithm(
     sentence_count: int = 2,
     parent_variant: int = 0,
 ) -> str:
+    if _NO_QUOTE_MODE:
+        return _render_summary_with_quotes(student, "")
+
     candidates = _candidate_sentences(student)
     if not candidates:
         student_quote, parent_quote = _select_quotes(student, [], parent_variant=parent_variant)
@@ -554,22 +593,40 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Standalone Result1/Result2 student summary generator."
     )
-    parser.add_argument("--appid", type=int, required=True, help="Student application id.")
+    parser.add_argument(
+        "--appid",
+        type=int,
+        required=False,
+        help="Student application id. If omitted, one is chosen at random.",
+    )
     parser.add_argument(
         "--grammar-clean",
         action="store_true",
         help="Apply offline grammar cleanup to selected quotes using LanguageTool.",
     )
+    parser.add_argument(
+        "--no-quote",
+        action="store_true",
+        help="Omit the student quote and output only profile facts and interests.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
-    global _GRAMMAR_CLEAN_ENABLED
+    global _GRAMMAR_CLEAN_ENABLED, _NO_QUOTE_MODE
     args = _parse_args()
     _GRAMMAR_CLEAN_ENABLED = bool(args.grammar_clean)
-    student = get_full_student_by_id(args.appid)
+    _NO_QUOTE_MODE = bool(args.no_quote)
+    app_id = args.appid if args.appid is not None else _random_app_id()
+    if app_id is None:
+        print("No FullStudent records found in student_full_view.")
+        return 1
+    if args.appid is None:
+        print(f"No appid provided; randomly selected app_id={app_id}.")
+
+    student = get_full_student_by_id(app_id)
     if student is None:
-        print(f"No FullStudent found for app_id={args.appid}.")
+        print(f"No FullStudent found for app_id={app_id}.")
         return 1
 
     try:
