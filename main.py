@@ -46,9 +46,9 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(guest_search.router)
+app.include_router(misc.router)
 app.include_router(admin.router, dependencies=[Depends(get_current_user)])
 app.include_router(students.router, dependencies=[Depends(get_current_user)])
-app.include_router(misc.router, dependencies=[Depends(get_current_user)])
 app.include_router(users.router, dependencies=[Depends(get_current_user)])
 app.include_router(feedback.router, dependencies=[Depends(get_current_user)])
 app.include_router(news_feed.router, dependencies=[Depends(get_current_user)])
