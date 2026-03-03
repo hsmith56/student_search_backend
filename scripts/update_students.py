@@ -79,7 +79,6 @@ def _get_filtered_stage_2_students(query: str) -> list[dict[str, Any]]:
                 agencyId,
                 placementStatusId,
                 placementStatusName,
-                paxNameLast,
                 paxNameFirst,
                 paxGender
             FROM student_basic_overview
@@ -105,7 +104,6 @@ def _get_stage_2_students_with_null_usahsid() -> list[dict[str, Any]]:
                 agencyId,
                 placementStatusId,
                 placementStatusName,
-                paxNameLast,
                 paxNameFirst,
                 paxGender
             FROM student_basic_overview

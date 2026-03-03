@@ -12,6 +12,7 @@ from routers import (
     admin,
     auth,
     feedback,
+    guest_search,
     misc,
     news_feed,
     notifications,
@@ -44,6 +45,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(guest_search.router)
 app.include_router(admin.router, dependencies=[Depends(get_current_user)])
 app.include_router(students.router, dependencies=[Depends(get_current_user)])
 app.include_router(misc.router, dependencies=[Depends(get_current_user)])

@@ -75,7 +75,6 @@ def initialize_db() -> None:
         agencyId INTEGER,
         placementStatusId INTEGER NOT NULL,
         placementStatusName TEXT NOT NULL,
-        paxNameLast TEXT,
         paxNameFirst TEXT,
         paxGender INTEGER
     )

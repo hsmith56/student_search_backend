@@ -18,7 +18,7 @@ def add_student_basic_overview(student) -> None:
     try:
         cursor.execute(
             """
-        INSERT INTO student_basic_overview (id, usaHsId, applicationId, participantId, agencyId, placementStatusId, placementStatusName, paxNameLast, paxNameFirst, paxGender)
+        INSERT INTO student_basic_overview (id, usaHsId, applicationId, participantId, agencyId, placementStatusId, placementStatusName, paxNameFirst, paxGender)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -29,7 +29,6 @@ def add_student_basic_overview(student) -> None:
                 student["agencyId"],
                 student["placementStatusId"],
                 student["placementStatusName"],
-                student["paxNameLast"],
                 student["paxNameFirst"],
                 student["paxGender"],
             ),
@@ -139,25 +138,12 @@ def read_students() -> list[dict[str, Any]]:
 
     cursor.execute(
         """
-    SELECT id, usaHsId, applicationId, participantId, agencyId, placementStatusId, placementStatusName, paxNameLast, paxNameFirst, paxGender FROM student_basic_overview
+    SELECT id, usaHsId, applicationId, participantId, agencyId, placementStatusId, placementStatusName, paxNameFirst, paxGender FROM student_basic_overview
     """
     )
     students = [dict(row) for row in cursor.fetchall()]
     connection.close()
     return students
-
-
-def delete_student(app_id):
-    connection = get_connection()
-    cursor = connection.cursor()
-    cursor.execute(
-        """
-    DELETE FROM simple_students WHERE app_id = ?
-    """,
-        (app_id,),
-    )
-    connection.commit()
-    connection.close()
 
 
 def to_json(value):

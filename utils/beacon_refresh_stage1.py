@@ -66,7 +66,7 @@ def _record_placement_event(**event) -> None:
 
 def _build_student_write_plan(student: dict) -> StudentWritePlan | None:
     current_status = student.get("placementStatusName")
-    first_name = student.get("paxNameFirst")
+    first_name = student.get("paxNameFirst").title()  # ty:ignore[unresolved-attribute]
     application_id = _first_int(student, ("applicationId",))
     coordinator_id = _first_int(
         student, ("localCoordinatorId", "coordinatorId", "lcId")

@@ -10,6 +10,7 @@ from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
 from enum import Enum
 from functools import lru_cache
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -50,13 +51,12 @@ def apply_filters(filters: SearchFilters) -> list[FullStudent]:
     return filter_students(students=get_all_full_students(), filters=filters)
 
 
-@router.post(path="/search")
-def search(
+def run_student_search(
     filters: SearchFilters,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=21, ge=1, le=100),
-    params: ItemQueryParams = Depends(),
-):
+    page: int,
+    page_size: int,
+    params: ItemQueryParams,
+) -> dict[str, Any]:
     logger.debug("student search filters=%s", filters.model_dump())
 
     results: list[FullStudent] = apply_filters(filters)  # pyright: ignore[reportRedeclaration, reportAssignmentType]
@@ -81,6 +81,18 @@ def search(
         "total_pages": (total + page_size - 1) // page_size,
         "results": paginated,
     }
+
+
+@router.post(path="/search")
+def search(
+    filters: SearchFilters,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=21, ge=1, le=100),
+    params: ItemQueryParams = Depends(),
+):
+    return run_student_search(
+        filters=filters, page=page, page_size=page_size, params=params
+    )
 
 
 @router.post(path="/update_db")
