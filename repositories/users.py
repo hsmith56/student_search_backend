@@ -60,7 +60,7 @@ def _to_signup_user_dict(row: sqlite3.Row, note_text: str | None = None) -> dict
         "first_name": item["first_name"],
         "last_name": item.get("last_name"),
         "email": item.get("email"),
-        "states": _parse_placing_states(item.get("placing_states")),
+        "states": _parse_placing_states(item.get("placing_states")),  # ty:ignore[invalid-argument-type]
         "account_type": item["account_type"],
         "manager_id": item.get("manager_id"),
         "is_registered": bool(item.get("is_registered", 1)),
@@ -287,7 +287,6 @@ def list_signup_users_for_manager(*, requester_id: str, requester_role: str) -> 
         SELECT id, username, first_name, last_name, email, account_type,
                "placing_states", manager_id, signup_code, is_registered
         FROM users
-        WHERE signup_code IS NOT NULL
         ORDER BY rowid DESC
         """
         )
@@ -298,7 +297,6 @@ def list_signup_users_for_manager(*, requester_id: str, requester_role: str) -> 
                "placing_states", manager_id, signup_code, is_registered
         FROM users
         WHERE manager_id = ?
-          AND signup_code IS NOT NULL
         ORDER BY rowid DESC
         """,
             (requester_id,),

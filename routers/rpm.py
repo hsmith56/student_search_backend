@@ -13,6 +13,7 @@ from repositories.users import (
     create_pending_signup_user,
     delete_user_by_id,
     get_signup_user_for_manager,
+    list_all_users_with_states,
     get_user_with_states_by_id,
     list_signup_users_for_manager,
     read_user,
@@ -39,7 +40,7 @@ def _require_admin(current_user: dict) -> None:
 def _normalize_optional_text(value: str | None) -> str | None:
     if isinstance(value, str) is False:
         return None
-    normalized = value.strip()
+    normalized = value.strip()  # ty:ignore[unresolved-attribute]
     return normalized if normalized != "" else None
 
 
@@ -292,21 +293,29 @@ def update_rpm_signup_request(
 )
 def admin_get(current_user: dict = Depends(get_current_user)) -> list[SignupRequestItem]:
     _require_admin(current_user=current_user)
-    rows = list_signup_users_for_manager(
-        requester_id=current_user["id"],
-        requester_role="admin",
-    )
+    users = list_all_users_with_states()
 
     notes_map = get_user_notes_for_owner(
         owner_id=current_user["id"],
-        notes_user_ids=[str(row["id"]) for row in rows],
+        notes_user_ids=[str(user["id"]) for user in users],
     )
 
     payload: list[SignupRequestItem] = []
-    for row in rows:
-        item = dict(row)
+    for user in users:
+        item = {
+            "id": user["id"],
+            "username": user["username"],
+            "first_name": user["first_name"],
+            "last_name": user.get("last_name"),
+            "email": user.get("email"),
+            "states": user.get("placing_states") or [],
+            "account_type": user["account_type"],
+            "manager_id": user.get("manager_id"),
+            "is_registered": user["is_registered"],
+            "signup_code": user.get("signup_code"),
+        }
         item["notes_text"] = notes_map.get(str(item["id"]))
-        payload.append(SignupRequestItem(**item))
+        payload.append(SignupRequestItem(**item))  # ty:ignore[invalid-argument-type]
     return payload
 
 
