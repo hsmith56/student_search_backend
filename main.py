@@ -1,3 +1,4 @@
+import asyncio
 from routers.auth import get_current_user
 from contextlib import asynccontextmanager
 
@@ -24,24 +25,33 @@ from routers import (
 
 setup_logging()
 
+
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    initialize_db()
-    await placement_notification_hub.start()
+async def lifespan(app: FastAPI):
     try:
+        await asyncio.to_thread(initialize_db)
+        await placement_notification_hub.start()
         yield
+    except Exception:
+        raise
     finally:
         await placement_notification_hub.stop()
 
 
-app = FastAPI(lifespan=lifespan)
+docs_url = None if settings.environment == "production" else "/docs"
+redoc_url = None if settings.environment == "production" else "/redoc"
+openapi_url = None if settings.environment == "production" else "/openapi.json"
+
+app = FastAPI(
+    lifespan=lifespan, docs_url=docs_url, redoc_url=redoc_url, openapi_url=openapi_url
+)
 
 app.add_middleware(
     CORSMiddleware,  # ty:ignore[invalid-argument-type]
     allow_origins=list(settings.cors_origins),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)
@@ -52,8 +62,6 @@ app.include_router(students.router, dependencies=[Depends(get_current_user)])
 app.include_router(users.router, dependencies=[Depends(get_current_user)])
 app.include_router(feedback.router, dependencies=[Depends(get_current_user)])
 app.include_router(news_feed.router, dependencies=[Depends(get_current_user)])
-app.include_router(
-    placement_metrics.router, dependencies=[Depends(get_current_user)]
-)
+app.include_router(placement_metrics.router, dependencies=[Depends(get_current_user)])
 app.include_router(rpm.router, dependencies=[Depends(get_current_user)])
 app.include_router(notifications.router)

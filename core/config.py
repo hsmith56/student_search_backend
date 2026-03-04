@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,27 @@ def _parse_csv(raw: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
         return default
     values = tuple(item.strip() for item in raw.split(",") if item.strip() != "")
     return values if len(values) > 0 else default
+
+
+def _normalize_domain(raw: str | None) -> str:
+    if raw is None or raw.strip() == "":
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    host = (parsed.netloc or parsed.path).strip().strip("/")
+    return host
+
+
+def _resolve_cors_origins(
+    environment: str, raw_cors_origins: str | None, domain: str
+) -> tuple[str, ...]:
+    if environment != "production":
+        return _parse_csv(raw_cors_origins, default=DEFAULT_CORS_ORIGINS)
+    if domain == "":
+        raise ValueError("DOMAIN must be set when ENVIRONMENT=production")
+    return (
+        f"http://{domain}",
+        f"https://{domain}",
+    )
 
 
 def _to_int(raw: str | None, default: int) -> int:
@@ -52,16 +74,18 @@ def _resolve_path(raw: str | None, default: Path) -> str:
 class Settings:
     def __init__(self) -> None:
         self.app_name = os.getenv("APP_NAME", "student-search-api")
-        self.environment = os.getenv("ENVIRONMENT", "development")
+        self.environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+        self.domain = _normalize_domain(os.getenv("DOMAIN"))
         self.database_path = _resolve_path(
             os.getenv("DATABASE_PATH"), default=Path("user_auth.db")
         )
         self.bearer_token_path = _resolve_path(
             os.getenv("BEARER_TOKEN_PATH"), default=Path("bearer_token")
         )
-        self.cors_origins = _parse_csv(
-            os.getenv("CORS_ORIGINS"),
-            default=DEFAULT_CORS_ORIGINS,
+        self.cors_origins = _resolve_cors_origins(
+            environment=self.environment,
+            raw_cors_origins=os.getenv("CORS_ORIGINS"),
+            domain=self.domain,
         )
         self.beacon_base_url = os.getenv(
             "BEACON_BASE_URL", "https://api.ciee.org"
@@ -102,7 +126,7 @@ class Settings:
             os.getenv("SMTP_TIMEOUT_SECONDS"), default=30
         )
         self.signup_invite_url = os.getenv(
-            "SIGNUP_INVITE_URL", "https://www.websitename.com/login"
+            "SIGNUP_INVITE_URL", "https://www.hsmithdev.xyz/login"
         )
         self.rpm_signup_code = os.getenv("RPM_SIGNUP_CODE", "")
         self.lc_signup_code = os.getenv("LC_SIGNUP_CODE", "")

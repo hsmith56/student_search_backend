@@ -19,7 +19,7 @@ def main() -> None:
     students_needing_stage_2 = get_updates_from_beacon()
     end = time.perf_counter()
 
-    logger.info(f"Total time: {end-start}")
+    logger.info(f"Total time: {end - start}")
     if len(students_needing_stage_2) > 0:
         run_stage_2_multi_threaded(students_needing_stage_2)
 

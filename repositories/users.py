@@ -276,7 +276,9 @@ def complete_signup_registration(
     return updated
 
 
-def list_signup_users_for_manager(*, requester_id: str, requester_role: str) -> list[dict]:
+def list_signup_users_for_manager(
+    *, requester_id: str, requester_role: str
+) -> list[dict]:
     normalized_role = requester_role.strip().lower()
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()

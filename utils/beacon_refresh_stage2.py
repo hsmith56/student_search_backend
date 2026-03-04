@@ -210,15 +210,21 @@ def get_placement_requests(field_id):
     # {"id":14,"displayName":"Southwest","systemName":"region_sw_prex","sequence":6},
     # {"id":8,"displayName":"Region 7 – Mountain West","systemName":"region7_mw","sequence":7},
     # {"id":3,"displayName":"Region 8 – Southwest","systemName":"region8_sw","sequence":8}]
-    if region is not None and r_json.get('regionalOrStatePlacementPreferred') == "Regional":
+    if (
+        region is not None
+        and r_json.get("regionalOrStatePlacementPreferred") == "Regional"
+    ):
         for state in state_mappings_orig:
             if region in state.get("regionId", []):
-                states.append(state['name'])
+                states.append(state["name"])
     if california != 14 and california:
         states.append("California")
     if florida != 19 and florida:
         states.append("Florida")
-    if single_state is not None and r_json.get('regionalOrStatePlacementPreferred') == "State":
+    if (
+        single_state is not None
+        and r_json.get("regionalOrStatePlacementPreferred") == "State"
+    ):
         states.append(state_mappings.get(single_state))
     early_placement = r_json.get("placementElectiveEarlyDecisionMayRequested")
     return states, early_placement, urban, remaining, pre_p
@@ -242,7 +248,7 @@ def add_sports_and_interests(field_id):
             student_interests["selectables"].append(
                 sports_interests_mappings.get(sportInterestedId)
             )
-    except:
+    except Exception:
         pass
     # print(student_interests)
     if (

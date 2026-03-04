@@ -23,7 +23,7 @@ class BasicStudent(BaseModel):
 class FullStudent(BasicStudent):
     id: int
     current_grade: int
-    status: str    
+    status: str
     early_placement: Optional[bool] = False
     single_placement: bool
     double_placement: bool

@@ -40,11 +40,7 @@ def filter_students(
         elif state_filters == ["state_only"]:
             res = [s for s in res if len(s.states) != 0]
         else:
-            res = [
-                s
-                for s in res
-                if any(st in filters.state for st in s.states)
-            ]
+            res = [s for s in res if any(st in filters.state for st in s.states)]
         logger.debug("Filter step 2 count=%s", len(res))
 
     if filters.interests:
@@ -77,8 +73,11 @@ def filter_students(
         logger.debug("Filter step 6 count=%s", len(res))
 
     if filters.country_of_origin and "all" not in filters.country_of_origin:
-
-        res = [s for s in res if s.country.lower() in [x.lower() for x in filters.country_of_origin]]
+        res = [
+            s
+            for s in res
+            if s.country.lower() in [x.lower() for x in filters.country_of_origin]
+        ]
         logger.debug("Filter step 7 count=%s", len(res))
 
     if filters.adjusted_age and filters.adjusted_age != "all":

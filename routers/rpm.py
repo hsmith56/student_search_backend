@@ -44,7 +44,9 @@ def _normalize_optional_text(value: str | None) -> str | None:
     return normalized if normalized != "" else None
 
 
-def _resolve_manager_id_for_create(payload: "SignupRequestCreate", current_user: dict) -> str | None:
+def _resolve_manager_id_for_create(
+    payload: "SignupRequestCreate", current_user: dict
+) -> str | None:
     creator_role = current_user["account_type"]
     if creator_role == "rpm":
         if payload.account_type == "admin":
@@ -156,7 +158,9 @@ def create_rpm_signup_request(
     _require_rpm_or_admin(current_user=current_user)
 
     normalized_email = _normalize_optional_text(payload.email)
-    manager_id = _resolve_manager_id_for_create(payload=payload, current_user=current_user)
+    manager_id = _resolve_manager_id_for_create(
+        payload=payload, current_user=current_user
+    )
 
     try:
         created = create_pending_signup_user(
@@ -291,7 +295,9 @@ def update_rpm_signup_request(
     path="/admin_get",
     response_model=list[SignupRequestItem],
 )
-def admin_get(current_user: dict = Depends(get_current_user)) -> list[SignupRequestItem]:
+def admin_get(
+    current_user: dict = Depends(get_current_user),
+) -> list[SignupRequestItem]:
     _require_admin(current_user=current_user)
     users = list_all_users_with_states()
 

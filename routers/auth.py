@@ -246,7 +246,9 @@ def register_user(user: CreateUserRequest):
             first_name=user.first_name,
         )
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to complete registration: {exc}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to complete registration: {exc}"
+        )
 
     if completed is False:
         raise HTTPException(status_code=401, detail="Invalid signup code provided")

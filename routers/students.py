@@ -124,4 +124,8 @@ def update_student_db(current_user: dict = Depends(get_current_user)) -> dict:
 
     update_time()
     apply_filters.cache_clear()
-    return {"message": "Student refresh completed", "stage_2_processed": processed, "total_time": end-start}
+    return {
+        "message": "Student refresh completed",
+        "stage_2_processed": processed,
+        "total_time": end - start,
+    }

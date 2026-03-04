@@ -8,14 +8,15 @@ from typing import Any
 
 from requests.adapters import HTTPAdapter
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 from core.logging_config import setup_logging
 from integrations.beacon_client import beacon_client
 from repositories.admin import initialize_db
 from repositories.base import get_connection
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 
 logger = logging.getLogger(__name__)
 

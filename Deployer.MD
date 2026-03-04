@@ -63,6 +63,7 @@ Create `.env` with production values (example):
 
 ```env
 ENVIRONMENT=production
+DOMAIN=your-domain.com
 DATABASE_PATH=./user_auth.db
 BEARER_TOKEN_PATH=./bearer_token
 CORS_ORIGINS=https://your-domain.com,https://www.your-domain.com

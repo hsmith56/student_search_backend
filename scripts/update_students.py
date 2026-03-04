@@ -8,10 +8,6 @@ from typing import Any, Optional
 
 from requests.adapters import HTTPAdapter
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 from core.logging_config import setup_logging
 from integrations.beacon_client import beacon_client
 from repositories.admin import initialize_db
@@ -22,6 +18,11 @@ from utils.beacon_refresh_stage2 import (
     get_placement_requests,
     run_stage_2_multi_threaded,
 )
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 
 logger = logging.getLogger(__name__)
 DEFAULT_THREADS = 8
@@ -207,7 +208,9 @@ def _fetch_usahsid_for_app(app_id: int) -> str:
             f"Basic information payload was not an object for app_id={app_id}"
         )
 
-    usahsid = basic_info_payload.get("usahsId") or basic_info_payload.get("usaHsId") or ""
+    usahsid = (
+        basic_info_payload.get("usahsId") or basic_info_payload.get("usaHsId") or ""
+    )
     return str(usahsid).strip()
 
 
@@ -300,7 +303,8 @@ def update_usahsids(app_ids: list[int], max_workers: int) -> tuple[int, int]:
     else:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {
-                pool.submit(_fetch_usahsid_for_app, app_id): app_id for app_id in app_ids
+                pool.submit(_fetch_usahsid_for_app, app_id): app_id
+                for app_id in app_ids
             }
             for index, future in enumerate(as_completed(futures), start=1):
                 app_id = futures[future]
@@ -308,7 +312,9 @@ def update_usahsids(app_ids: list[int], max_workers: int) -> tuple[int, int]:
                     updates_by_app_id[app_id] = future.result()
                 except Exception as exc:
                     failed += 1
-                    logger.warning("usahsid update failed for app_id=%s: %s", app_id, exc)
+                    logger.warning(
+                        "usahsid update failed for app_id=%s: %s", app_id, exc
+                    )
 
                 if index % 100 == 0:
                     logger.info(

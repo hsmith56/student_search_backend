@@ -60,11 +60,7 @@ def get_placement_metric_items() -> list[PlacementMetricItem]:
 def update_placement_metric_item(
     app_id: int, payload: PlacementMetricUpdateRequest
 ) -> PlacementMetricItem:
-    if (
-        payload.city is None
-        and payload.state is None
-        and payload.placementDate is None
-    ):
+    if payload.city is None and payload.state is None and payload.placementDate is None:
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
     updated = update_placement_metric(

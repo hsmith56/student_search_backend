@@ -56,6 +56,7 @@ The app now reads centralized settings from `.env` via `core/config.py`.
 # Optional app settings
 APP_NAME=student-search-api
 ENVIRONMENT=development
+DOMAIN=your-domain.com
 DATABASE_PATH=./user_auth.db
 BEARER_TOKEN_PATH=./bearer_token
 CORS_ORIGINS=https://localhost,http://localhost,https://hsmithtech.com,https://www.hsmithtech.com,*
@@ -75,6 +76,12 @@ LOG_TO_CONSOLE=true
 BEACON_USERNAME=...
 BEACON_PASSWORD=...
 ```
+
+When `ENVIRONMENT=production`, `DOMAIN` is required. CORS origins are automatically set to:
+- `http://localhost`
+- `https://localhost`
+- `http://<DOMAIN>`
+- `https://<DOMAIN>`
 
 ## API Notes
 - Student refresh endpoint is mutating and now uses `POST /students/update_db`.

@@ -4,13 +4,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from core.logging_config import setup_logging
+from repositories.admin import initialize_db
+from repositories.base import get_connection
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from core.logging_config import setup_logging
-from repositories.admin import initialize_db
-from repositories.base import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +89,15 @@ def main() -> None:
     setup_logging()
     initialize_db()
 
-    input_path = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_INPUT_PATH
+    input_path = (
+        Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_INPUT_PATH
+    )
     logger.info("Importing placement metrics from %s", input_path)
 
     imported, skipped = import_placement_metrics(input_path)
-    logger.info("placement_metrics import complete imported=%s skipped=%s", imported, skipped)
+    logger.info(
+        "placement_metrics import complete imported=%s skipped=%s", imported, skipped
+    )
 
 
 if __name__ == "__main__":
