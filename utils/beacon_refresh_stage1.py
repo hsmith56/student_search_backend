@@ -81,8 +81,8 @@ def _build_student_write_plan(student: dict) -> StudentWritePlan | None:
     if student_id is not None:
         if current_status != status_in_db:
             requires_stage_2 = status_in_db.lower() == "unassigned"
-            if requires_stage_2:
-                logger.info(student)
+            # if requires_stage_2:
+            #     logger.info(student)
             return StudentWritePlan(
                 student=student,
                 is_new_student=False,

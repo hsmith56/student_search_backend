@@ -19,7 +19,7 @@ def add_student_basic_overview(student) -> None:
         cursor.execute(
             """
         INSERT INTO student_basic_overview (id, usaHsId, applicationId, participantId, agencyId, placementStatusId, placementStatusName, paxNameFirst, paxGender)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 student["id"],
