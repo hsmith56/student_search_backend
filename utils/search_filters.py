@@ -1,302 +1,381 @@
 import logging
+from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
 from models.student import FullStudent
 from rapidfuzz import fuzz, utils
 
 logger = logging.getLogger(__name__)
+FilterStep = Callable[[list[FullStudent], SearchFilters], list[FullStudent]]
+
+
+PHOTO_MATCH_THRESHOLD: Final[int] = 86
+FREE_TEXT_RATIO_THRESHOLD: Final[int] = 86
+FREE_TEXT_PARTIAL_THRESHOLD: Final[int] = 80
+
+
+def _normalized_tuple_values(values: Optional[tuple[str, ...]]) -> list[str]:
+    if values is None:
+        return []
+    return [value.strip().lower() for value in values if isinstance(value, str) and value.strip()]
+
+
+def _filter_status_options(
+    students: list[FullStudent], filters: SearchFilters
+) -> list[FullStudent]:
+    status_options = _normalized_tuple_values(filters.statusOptions)
+    if not status_options or "all" in status_options:
+        return students
+
+    return [
+        student
+        for student in students
+        if any(option in student.placement_status.lower() for option in status_options)
+    ]
+
+
+def _filter_gender(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.gender_female is None or filters.gender_male is None:
+        return students
+
+    if filters.gender_female is True and filters.gender_male is True:
+        return students
+    if filters.gender_female is True:
+        return [student for student in students if student.gender_desc.lower() == "female"]
+    if filters.gender_male is True:
+        return [student for student in students if student.gender_desc.lower() == "male"]
+    return students
+
+
+def _filter_state(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.state is None:
+        return students
+
+    state_filters = _normalized_tuple_values(filters.state)
+    state_filters_set = set(state_filters)
+    specific_states = {
+        state for state in state_filters_set if state not in {"all", "no_pref", "state_only"}
+    }
+
+    if state_filters == ["all"]:
+        return students
+    if state_filters == ["no_pref"]:
+        return [student for student in students if len(student.states) == 0]
+    if state_filters == ["state_only"]:
+        return [student for student in students if len(student.states) != 0]
+
+    include_no_pref = "no_pref" in state_filters_set
+    if include_no_pref and specific_states:
+        return [
+            student
+            for student in students
+            if len(student.states) == 0
+            or any(state.lower() in specific_states for state in student.states)
+        ]
+    if include_no_pref:
+        return [student for student in students if len(student.states) == 0]
+    return [student for student in students if any(state.lower() in specific_states for state in student.states)]
+
+
+def _filter_interests(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.interests is None or filters.interests == "all":
+        return students
+    if students:
+        logger.debug("Selected interests sample=%s", students[0].selected_interests)
+    return [student for student in students if filters.interests in student.selected_interests]
+
+
+def _filter_gpa(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.gpa is None or filters.gpa == "all":
+        return students
+
+    try:
+        gpa_value = float(filters.gpa)
+    except ValueError:
+        return students
+
+    return [student for student in students if student.gpa and float(student.gpa) >= gpa_value]
+
+
+def _filter_pets_in_home(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.pets_in_home is None or filters.pets_in_home == "all":
+        return students
+
+    mapping = {"yes": True, "no": False}
+    target = mapping.get(filters.pets_in_home)
+    if target is None:
+        return students
+    return [student for student in students if student.live_with_pets is target]
+
+
+def _filter_usahsid(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if not filters.usahsId:
+        return students
+    query = filters.usahsId.lower()
+    return [student for student in students if query in student.usahsid.lower()]
+
+
+def _filter_country_of_origin(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    countries = _normalized_tuple_values(filters.country_of_origin)
+    if not countries or "all" in countries:
+        return students
+    country_set = set(countries)
+    return [student for student in students if student.country.lower() in country_set]
+
+
+def _filter_adjusted_age(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.adjusted_age is None or filters.adjusted_age == "all":
+        return students
+
+    try:
+        age_value = int(filters.adjusted_age)
+    except ValueError:
+        return students
+
+    return [
+        student for student in students if student.adjusted_age and student.adjusted_age >= age_value
+    ]
+
+
+def _filter_single_placement(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.single_placement is None or filters.single_placement == "all":
+        return students
+
+    value = filters.single_placement.lower()
+    if value == "yes":
+        return [student for student in students if student.single_placement is True]
+    if value == "no":
+        return [student for student in students if student.single_placement is False]
+    return students
+
+
+def _filter_double_placement(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.double_placement is None or filters.double_placement == "all":
+        return students
+
+    value = filters.double_placement.lower()
+    if value == "yes":
+        return [student for student in students if student.double_placement is True]
+    if value == "no":
+        return [student for student in students if student.double_placement is False]
+    return students
+
+
+def _filter_program_types(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.program_types is None or not filters.program_types:
+        return students
+
+    mapping = {
+        "10-month-aug": "August 10",
+        "5-month-aug": "August 5",
+        "10-month-jan": "January 10",
+        "5-month-jan": "January 5",
+    }
+    program_types = [mapping[program_type] for program_type in filters.program_types]
+    return [student for student in students if any(program in student.program_type for program in program_types)]
+
+
+def _filter_early_placement(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.early_placement is None or filters.early_placement == "all":
+        return students
+
+    if filters.early_placement.lower() == "yes":
+        return [student for student in students if "EP" in student.usahsid.upper()]
+    return [student for student in students if "EP" not in student.usahsid.upper()]
+
+
+def _filter_has_video(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.hasVideo is None or filters.hasVideo is False:
+        return students
+    return [student for student in students if student.media_link != ""]
+
+
+def _filter_religious_practice(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.religiousPractice is None or filters.religiousPractice == "all":
+        return students
+
+    mapping = {"none": 0, "some": 1, "often": 2}
+    return [
+        student for student in students if student.religious_frequency == mapping[filters.religiousPractice]
+    ]
+
+
+def _filter_grants_options(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.grants_options is None or len(filters.grants_options) == 0:
+        return students
+
+    if "grant" in filters.grants_options:
+        grant_prefixes = {"CBE", "CBX", "FAO", "FLX", "YES", "CBG"}
+        return [student for student in students if student.usahsid.upper()[0:3] in grant_prefixes]
+
+    grants_set = set(filters.grants_options)
+    return [student for student in students if student.usahsid.lower()[0:3] in grants_set]
+
+
+def _filter_photo_search(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.photo_search is None or filters.photo_search == "":
+        return students
+
+    return [
+        student
+        for student in students
+        if fuzz.partial_ratio(
+            filters.photo_search, student.photo_comments, processor=utils.default_process
+        )
+        >= PHOTO_MATCH_THRESHOLD
+    ]
+
+
+def _matches_free_text(search_query: str, student: FullStudent) -> bool:
+    if (
+        fuzz.ratio(search_query, student.first_name, processor=utils.default_process)
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query, student.photo_comments, processor=utils.default_process
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.ratio(search_query, student.religion, processor=utils.default_process)
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query, student.allergy_comments, processor=utils.default_process
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            student.dietary_restrictions,
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query, " ".join(w for w in student.health_comments), processor=utils.default_process
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            " ".join(w for w in student.favorite_subjects),
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            " ".join(w for w in student.selected_interests),
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            " ".join(w for w in student.free_text_interests),
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_PARTIAL_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query, student.intro_message, processor=utils.default_process
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            student.message_to_host_family,
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    if (
+        fuzz.partial_ratio(
+            search_query,
+            student.message_from_natural_family,
+            processor=utils.default_process,
+        )
+        >= FREE_TEXT_RATIO_THRESHOLD
+    ):
+        return True
+    return False
+
+
+def _filter_free_text(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.free_text is None or filters.free_text == "":
+        return students
+
+    return [student for student in students if _matches_free_text(filters.free_text, student)]
+
+
+FilterSpec = tuple[str, FilterStep]
+
+_FILTER_STEPS: Final[Sequence[FilterSpec]] = (
+    ("status_options", _filter_status_options),
+    ("gender", _filter_gender),
+    ("state", _filter_state),
+    ("interests", _filter_interests),
+    ("gpa", _filter_gpa),
+    ("pets_in_home", _filter_pets_in_home),
+    ("usahsid", _filter_usahsid),
+    ("country_of_origin", _filter_country_of_origin),
+    ("adjusted_age", _filter_adjusted_age),
+    ("single_placement", _filter_single_placement),
+    ("double_placement", _filter_double_placement),
+    ("program_types", _filter_program_types),
+    ("early_placement", _filter_early_placement),
+    ("has_video", _filter_has_video),
+    ("religious_practice", _filter_religious_practice),
+    ("grants_options", _filter_grants_options),
+    ("photo_search", _filter_photo_search),
+    ("free_text", _filter_free_text),
+)
+
+_FILTER_LOOKUP = {name: fn for name, fn in _FILTER_STEPS}
+
+
+def _apply_filters(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    res = students
+    for name, step in _FILTER_STEPS:
+        before_count = len(res)
+        res = step(res, filters)
+        if before_count != len(res):
+            logger.debug("%s count=%s", name, len(res))
+    return res
+
+
+def apply_single_filter(students: list[FullStudent], filters: SearchFilters, filter_name: str) -> list[FullStudent]:
+    if filter_name not in _FILTER_LOOKUP:
+        raise ValueError(f"Unknown filter_name: {filter_name}")
+    return _FILTER_LOOKUP[filter_name](students, filters)
 
 
 def filter_students(
-    students: list[FullStudent], filters: SearchFilters
+    students: list[FullStudent],
+    filters: SearchFilters,
+    filter_name: Optional[str] = None,
 ) -> list[FullStudent]:
-    res: list[FullStudent] = students
-
-    if filters.statusOptions is not None and "All" not in filters.statusOptions:
-        lower_options = [x.lower() for x in filters.statusOptions]
-        res = [
-            s
-            for s in res
-            if any(opt in s.placement_status.lower() for opt in lower_options)
-        ]
-
-    if filters.gender_female is not None and filters.gender_male is not None:
-        if filters.gender_female is True and filters.gender_male is True:
-            pass
-        elif filters.gender_female is True:
-            res = [s for s in res if s.gender_desc.lower() == "female"]
-        elif filters.gender_male is True:
-            res = [s for s in res if s.gender_desc.lower() == "male"]
-
-        logger.debug("Filter step 1 count=%s", len(res))
-
-    if filters.state is not None:
-        state_filters = [state.strip() for state in filters.state if state.strip()]
-        state_filters_lower = [state.lower() for state in state_filters]
-        state_filters_set = set(state_filters_lower)
-        include_no_pref = "no_pref" in state_filters_set
-        specific_states = {
-            state for state in state_filters_set if state not in {"all", "no_pref", "state_only"}
-        }
-
-        if state_filters_lower == ["all"]:
-            pass
-        elif state_filters_lower == ["no_pref"]:
-            res = [s for s in res if len(s.states) == 0]
-        elif state_filters_lower == ["state_only"]:
-            res = [s for s in res if len(s.states) != 0]
-        else:
-            if include_no_pref and specific_states:
-                res = [
-                    s
-                    for s in res
-                    if len(s.states) == 0
-                    or any(st.lower() in specific_states for st in s.states)
-                ]
-            elif include_no_pref:
-                res = [s for s in res if len(s.states) == 0]
-            else:
-                res = [s for s in res if any(st.lower() in specific_states for st in s.states)]
-        logger.debug("Filter step 2 count=%s", len(res))
-
-    if filters.interests:
-        if filters.interests.lower() == "all":
-            pass
-        else:
-            if len(res) > 0:
-                logger.debug("Selected interests sample=%s", res[0].selected_interests)
-            res = [s for s in res if filters.interests in s.selected_interests]
-            logger.debug("Filter step 3 count=%s", len(res))
-
-    if filters.gpa and filters.gpa != "all":
-        try:
-            gpa_value = float(filters.gpa)
-            res = [s for s in res if s.gpa and float(s.gpa) >= gpa_value]
-        except ValueError:
-            pass
-        logger.debug("Filter step 4 count=%s", len(res))
-
-    if filters.pets_in_home is not None and isinstance(filters.pets_in_home, str):
-        if filters.pets_in_home != "all":
-            mapping = {"yes": True, "no": False}
-            res = [
-                s for s in res if s.live_with_pets is mapping.get(filters.pets_in_home)
-            ]
-            logger.debug("Filter step 5 count=%s", len(res))
-
-    if filters.usahsId:
-        res = [s for s in res if filters.usahsId.lower() in s.usahsid.lower()]
-        logger.debug("Filter step 6 count=%s", len(res))
-
-    if filters.country_of_origin and "all" not in filters.country_of_origin:
-        res = [
-            s
-            for s in res
-            if s.country.lower() in [x.lower() for x in filters.country_of_origin]
-        ]
-        logger.debug("Filter step 7 count=%s", len(res))
-
-    if filters.adjusted_age and filters.adjusted_age != "all":
-        try:
-            age_value = int(filters.adjusted_age)
-            res = [s for s in res if s.adjusted_age and s.adjusted_age >= age_value]
-        except ValueError:
-            pass  # Ignore invalid age filter
-        logger.debug("Filter step 8 count=%s", len(res))
-
-    if filters.single_placement is not None and filters.single_placement != "all":
-        if filters.single_placement.lower() == "yes":
-            res = [s for s in res if s.single_placement is True]
-        elif filters.single_placement.lower() == "no":
-            res = [s for s in res if s.single_placement is True]
-        logger.debug("Filter step 9 count=%s", len(res))
-
-    if filters.double_placement is not None and filters.double_placement != "all":
-        if filters.double_placement.lower() == "yes":
-            res = [s for s in res if s.double_placement is True]
-        elif filters.double_placement.lower() == "no":
-            res = [s for s in res if s.double_placement is False]
-        logger.debug("Filter step 10 count=%s", len(res))
-
-    if filters.program_types is not None and isinstance(filters.program_types, tuple):
-        if len(filters.program_types) == 0:
-            pass
-        else:
-            mapping = {
-                "10-month-aug": "August 10",
-                "5-month-aug": "August 5",
-                "10-month-jan": "January 10",
-                "5-month-jan": "January 5",
-            }
-            p_types = [mapping[x] for x in filters.program_types]
-            res = [s for s in res if any([x in s.program_type for x in p_types])]
-            logger.debug("Filter step 11 count=%s", len(res))
-
-    if filters.early_placement is not None and filters.early_placement != "all":
-        if filters.early_placement.lower() == "yes":
-            res = [s for s in res if "EP" in s.usahsid.upper()]
-        else:
-            res = [s for s in res if "EP" not in s.usahsid.upper()]
-        logger.debug("Filter step 12 count=%s", len(res))
-
-    # TODO: Confirm if this worked
-    if filters.hasVideo is not None and filters.hasVideo is True:
-        res = [s for s in res if s.media_link != ""]
-        logger.debug("Filter step 13 count=%s", len(res))
-
-    if filters.religiousPractice is not None and filters.religiousPractice != "all":
-        mapping = {
-            "none": 0,
-            "some": 1,
-            "often": 2,
-        }
-        res = [
-            s
-            for s in res
-            if s.religious_frequency == mapping[filters.religiousPractice]
-        ]
-        logger.debug("Filter step 14 count=%s", len(res))
-
-    if filters.grants_options is not None and len(filters.grants_options) != 0:
-        if "grant" in filters.grants_options:
-            res = [
-                x
-                for x in res
-                if x.usahsid.upper()[0:3] in ["CBE", "CBX", "FAO", "FLX", "YES", "CBG"]
-            ]
-        else:
-            res = [
-                student
-                for student in res
-                if student.usahsid.lower()[0:3] in filters.grants_options
-            ]
-        logger.debug("Filter step 15 count=%s", len(res))
-
-    # TODO: Switch to embeddings
-    if filters.photo_search is not None and filters.photo_search != "":
-        res = [
-            s
-            for s in res
-            if fuzz.partial_ratio(
-                filters.photo_search, s.photo_comments, processor=utils.default_process
-            )
-            >= 86
-        ]
-        logger.debug("Filter step 16 count=%s", len(res))
-
-    if filters.free_text is not None and filters.free_text != "":
-        x: list[FullStudent] = []
-
-        for student in res:
-            if (
-                fuzz.ratio(
-                    filters.free_text,
-                    student.first_name,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.photo_comments,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.ratio(
-                    filters.free_text, student.religion, processor=utils.default_process
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.allergy_comments,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.dietary_restrictions,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    " ".join(w for w in student.health_comments),
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    " ".join(w for w in student.favorite_subjects),
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    " ".join(w for w in student.selected_interests),
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    " ".join(w for w in student.free_text_interests),
-                    processor=utils.default_process,
-                )
-            ) >= 80:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.intro_message,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.message_to_host_family,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-            if (
-                fuzz.partial_ratio(
-                    filters.free_text,
-                    student.message_from_natural_family,
-                    processor=utils.default_process,
-                )
-            ) >= 86:
-                x.append(student)
-                continue
-
-        res = [w for w in x]
-        logger.debug("Filter step 17 count=%s", len(res))
-        # TODO: Stop after 21 results, then continue to do the analysis in the background
-        # TODO: Preprocess everything beforehand so that any string is ever processed once.
-    return res
+    if filter_name is None:
+        return _apply_filters(students, filters)
+    return apply_single_filter(students, filters, filter_name=filter_name)
