@@ -181,9 +181,9 @@ def insert_full_student(student):
         favorite_subjects, photo_comments, religion, allergy_comments,
         dietary_restrictions, religious_frequency, intro_message,
         message_to_host_family, message_from_natural_family, media_link,
-        health_comments, live_with_pets, local_coordinator
+        health_comments, live_with_pets, local_coordinator, tuition_placement
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(app_id) DO UPDATE SET
         id = excluded.id,
         first_name = excluded.first_name,
@@ -219,7 +219,8 @@ def insert_full_student(student):
         media_link = excluded.media_link,
         health_comments = excluded.health_comments,
         live_with_pets = excluded.live_with_pets,
-        local_coordinator = excluded.local_coordinator
+        local_coordinator = excluded.local_coordinator,
+        tuition_placement = excluded.tuition_placement
     """
 
     student = _full_student_dict(student)
@@ -261,6 +262,7 @@ def insert_full_student(student):
         to_json(student.health_comments),
         bool_to_int(student.live_with_pets),
         student.local_coordinator,
+        student.tuition_placement
     )
 
     connection = get_connection(detect_types=True)
@@ -310,6 +312,7 @@ def row_to_student(row) -> FullStudent:
         health_comments=from_json(data["health_comments"], []),
         live_with_pets=int_to_bool(data["live_with_pets"]),
         local_coordinator=data["local_coordinator"],
+        tuition_placement=data["tuition_placement"],
     )
 
 

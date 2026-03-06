@@ -101,6 +101,7 @@ def initialize_db() -> None:
         status TEXT,
         states TEXT,
         early_placement BOOLEAN DEFAULT 0,
+        tuition_placement BOOLEAN DEFAULT 0,
         single_placement BOOLEAN NOT NULL,
         double_placement BOOLEAN NOT NULL,
         free_text_interests TEXT,

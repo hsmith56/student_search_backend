@@ -43,4 +43,5 @@ def _full_student_dict(student: dict) -> FullStudent:
         health_comments=student["health_comments"],
         live_with_pets=student["can_live_w_pets"],
         placement_status=student["placementStatusName"].title(),
+        tuition_placement=student["tuition_placement"]
     )

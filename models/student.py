@@ -25,6 +25,7 @@ class FullStudent(BasicStudent):
     current_grade: int
     status: str
     early_placement: Optional[bool] = False
+    tuition_placement: bool
     single_placement: bool
     double_placement: bool
     free_text_interests: list[str]

@@ -227,7 +227,8 @@ def get_placement_requests(field_id):
     ):
         states.append(state_mappings.get(single_state))
     early_placement = r_json.get("placementElectiveEarlyDecisionMayRequested")
-    return states, early_placement, urban, remaining, pre_p
+    tuition_p = True if r_json.get("tuitionPlacementConsidered", False) is True else False
+    return states, early_placement, urban, remaining, pre_p, tuition_p
 
 
 def get_media(field_id):
@@ -431,9 +432,13 @@ def fill_out_student(student):
     # get states, I believe this needs additional work as of now
 
     student_placement_field = student["mappings"].get("hsjPlacementOptions")
-    hsjPlacementOptions, early_placement, urban, remaining, pre_p = (
+    hsjPlacementOptions, early_placement, urban, remaining, pre_p, tuition_p = (
         get_placement_requests(student_placement_field)
     )
+    if tuition_p is False:
+        student.update({"tuition_placement": False})
+    else:
+        student.update({"tuition_placement": True})
     if pre_p is not None and pre_p is False:
         logger.debug("Student marked preplacement and uninterested in normal placement")
         student.update({"statussystemname": "preplacement"})
