@@ -29,6 +29,10 @@ def _hash_value(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _is_empty_filter_value(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {} or value == ()
+
+
 def _resolve_event_name(method: str, path: str) -> Optional[str]:
     event_name = _TRACKED_ROUTE_EVENTS.get((method, path))
     if event_name is not None:
@@ -77,6 +81,35 @@ def _resolve_distinct_id(request: Request) -> str:
     return f"anonymous:{_hash_value(host)}"
 
 
+async def preload_tracked_route_metadata(request: Request) -> None:
+    route_key = (request.method.upper(), request.url.path)
+    metadata: dict[str, Any] = {}
+
+    if route_key == ("POST", "/students/search"):
+        try:
+            payload = await request.json()
+            if isinstance(payload, dict):
+                filters = {
+                    key: value
+                    for key, value in payload.items()
+                    if not _is_empty_filter_value(value)
+                }
+                metadata["filters"] = filters
+        except Exception:
+            # Ignore parsing issues; request handler still executes as usual.
+            pass
+
+    if route_key in {
+        ("PATCH", "/user/favorites"),
+        ("DELETE", "/user/favorites"),
+    }:
+        app_id = request.query_params.get("app_id")
+        if app_id:
+            metadata["student_id"] = app_id
+
+    request.state.analytics_metadata = metadata
+
+
 def capture_tracked_route_event(request: Request, response: Response) -> None:
     event_name = _resolve_event_name(request.method.upper(), request.url.path)
     if event_name is None:
@@ -91,6 +124,9 @@ def capture_tracked_route_event(request: Request, response: Response) -> None:
         "path": request.url.path,
         "status_code": response.status_code,
     }
+    extra_metadata = getattr(request.state, "analytics_metadata", None)
+    if isinstance(extra_metadata, dict) and extra_metadata:
+        properties.update(extra_metadata)
 
     if event_name == "student_full_profile_viewed":
         app_id = request.url.path.rsplit("/", maxsplit=1)[-1]

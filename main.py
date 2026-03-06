@@ -6,7 +6,11 @@ from fastapi import Depends, FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.analytics import capture_tracked_route_event, shutdown_posthog
+from core.analytics import (
+    capture_tracked_route_event,
+    preload_tracked_route_metadata,
+    shutdown_posthog,
+)
 from core.config import settings
 from core.logging_config import setup_logging
 from core.placement_notifications import placement_notification_hub
@@ -60,6 +64,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def analytics_tracking_middleware(request: Request, call_next):
+    await preload_tracked_route_metadata(request=request)
     response = await call_next(request)
     capture_tracked_route_event(request=request, response=response)
     return response
