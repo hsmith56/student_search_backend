@@ -31,16 +31,32 @@ def filter_students(
         logger.debug("Filter step 1 count=%s", len(res))
 
     if filters.state is not None:
-        state_filters = [state.lower() for state in filters.state if state.strip()]
+        state_filters = [state.strip() for state in filters.state if state.strip()]
+        state_filters_lower = [state.lower() for state in state_filters]
+        state_filters_set = set(state_filters_lower)
+        include_no_pref = "no_pref" in state_filters_set
+        specific_states = {
+            state for state in state_filters_set if state not in {"all", "no_pref", "state_only"}
+        }
 
-        if state_filters == ["all"]:
+        if state_filters_lower == ["all"]:
             pass
-        elif state_filters == ["no_pref"]:
+        elif state_filters_lower == ["no_pref"]:
             res = [s for s in res if len(s.states) == 0]
-        elif state_filters == ["state_only"]:
+        elif state_filters_lower == ["state_only"]:
             res = [s for s in res if len(s.states) != 0]
         else:
-            res = [s for s in res if any(st in filters.state for st in s.states)]
+            if include_no_pref and specific_states:
+                res = [
+                    s
+                    for s in res
+                    if len(s.states) == 0
+                    or any(st.lower() in specific_states for st in s.states)
+                ]
+            elif include_no_pref:
+                res = [s for s in res if len(s.states) == 0]
+            else:
+                res = [s for s in res if any(st.lower() in specific_states for st in s.states)]
         logger.debug("Filter step 2 count=%s", len(res))
 
     if filters.interests:
