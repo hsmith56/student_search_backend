@@ -130,6 +130,8 @@ class Settings:
         )
         self.rpm_signup_code = os.getenv("RPM_SIGNUP_CODE", "")
         self.lc_signup_code = os.getenv("LC_SIGNUP_CODE", "")
+        self.post_hog_api_key = os.getenv("POST_HOG_API_KEY", "").strip()
+        self.post_hog_host = os.getenv("POST_HOG_HOST", "").strip().rstrip("/")
 
 
 settings = Settings()

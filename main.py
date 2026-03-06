@@ -3,8 +3,10 @@ from routers.auth import get_current_user
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.analytics import capture_tracked_route_event, shutdown_posthog
 from core.config import settings
 from core.logging_config import setup_logging
 from core.placement_notifications import placement_notification_hub
@@ -35,6 +37,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         raise
     finally:
+        shutdown_posthog()
         await placement_notification_hub.stop()
 
 
@@ -53,6 +56,13 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def analytics_tracking_middleware(request: Request, call_next):
+    response = await call_next(request)
+    capture_tracked_route_event(request=request, response=response)
+    return response
 
 app.include_router(auth.router)
 app.include_router(guest_search.router)
