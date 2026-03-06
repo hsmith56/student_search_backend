@@ -13,6 +13,7 @@ from repositories.users import (
     create_pending_signup_user,
     delete_user_by_id,
     get_signup_user_for_manager,
+    update_user_account_type_by_id,
     list_all_users_with_states,
     get_user_with_states_by_id,
     list_signup_users_for_manager,
@@ -128,14 +129,19 @@ class AdminGetUserItem(BaseModel):
     account_type: Literal["admin", "rpm", "lc"]
     states: list[str]
     manager_id: str | None = None
+    notes_text: str | None = None
 
 
 class AdminPatchRequest(BaseModel):
     states: list[str] | None = None
     manager_id: str | None = None
+    account_type: Literal["admin", "rpm", "lc"] | None = None
+    notes_text: str | None = None
 
 
-def _to_admin_user_item(payload: dict) -> AdminGetUserItem:
+def _to_admin_user_item(
+    payload: dict, notes_text: str | None = None
+) -> AdminGetUserItem:
     manager_id = payload.get("manager_id")
     if payload["account_type"] != "lc":
         manager_id = None
@@ -147,6 +153,7 @@ def _to_admin_user_item(payload: dict) -> AdminGetUserItem:
         account_type=payload["account_type"],
         states=payload["placing_states"],
         manager_id=manager_id,
+        notes_text=notes_text,
     )
 
 
@@ -339,17 +346,45 @@ def admin_patch(
 
     update_states = "states" in payload.model_fields_set
     update_manager_id = "manager_id" in payload.model_fields_set
-    if update_states is False and update_manager_id is False:
+    update_account_type = "account_type" in payload.model_fields_set
+    update_notes = "notes_text" in payload.model_fields_set
+    if (
+        update_states is False
+        and update_manager_id is False
+        and update_account_type is False
+        and update_notes is False
+    ):
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
     user = get_user_with_states_by_id(user_id=user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    next_account_type = (
+        payload.account_type if update_account_type else user["account_type"]
+    )
+    if update_account_type:
+        if payload.account_type is None:
+            raise HTTPException(
+                status_code=400, detail="account_type cannot be null"
+            )
+        try:
+            account_type_updated = update_user_account_type_by_id(
+                user_id=user_id,
+                account_type=payload.account_type,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if account_type_updated is False:
+            raise HTTPException(status_code=404, detail="User not found")
+        user["account_type"] = payload.account_type
+        next_account_type = payload.account_type
+
     if update_manager_id:
         normalized_manager_id = _normalize_optional_text(payload.manager_id)
 
-        if user["account_type"] != "lc" and normalized_manager_id is not None:
+        if next_account_type != "lc" and normalized_manager_id is not None:
             raise HTTPException(
                 status_code=400,
                 detail="manager_id can only be set for local coordinator accounts",
@@ -380,10 +415,22 @@ def admin_patch(
         if states_updated is False:
             raise HTTPException(status_code=404, detail="User not found")
 
+    if update_notes:
+        upsert_user_note(
+            owner_id=current_user["id"],
+            notes_user_id=user_id,
+            note_text=payload.notes_text if payload.notes_text is not None else "",
+        )
+
     user = get_user_with_states_by_id(user_id=user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return _to_admin_user_item(payload=user)
+
+    notes_text = get_user_note(
+        owner_id=current_user["id"],
+        notes_user_id=user_id,
+    )
+    return _to_admin_user_item(payload=user, notes_text=notes_text)
 
 
 @router.delete(path="/admin_delete/{user_id}")
