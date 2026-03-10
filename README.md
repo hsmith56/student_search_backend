@@ -97,7 +97,6 @@ The database retains the minimal operational identifiers such as `first_name`, `
 | `media_link` | Video/media availability |
 | `health_comments` | Searchable health-related notes |
 | `live_with_pets` | Pet compatibility filtering |
-| `local_coordinator` | Local coordinator assignment or display field |
 
 ## What This Repo Runs
 
