@@ -154,7 +154,7 @@ APP_NAME=student-search-api
 ENVIRONMENT=development
 DATABASE_PATH=./user_auth.db
 BEARER_TOKEN_PATH=./bearer_token
-CORS_ORIGINS=https://localhost,http://localhost,https://hsmithtech.com,https://www.hsmithtech.com,*
+CORS_ORIGINS=https://localhost,http://localhost,https://custom_domain.com,https://www.custom_domain.com,*
 
 BEACON_USERNAME=
 BEACON_PASSWORD=
@@ -163,7 +163,7 @@ BEACON_PASSWORD=
 Useful optional settings already supported by the app:
 
 ```env
-BEACON_BASE_URL=https://api.ciee.org
+BEACON_BASE_URL=https://api.<api_here>.org
 BEACON_THREADS=16
 BEACON_TIMEOUT_SECONDS=30
 BEACON_MAX_RETRIES=3
@@ -183,7 +183,7 @@ SMTP_PASS=
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_TIMEOUT_SECONDS=30
-SIGNUP_INVITE_URL=https://www.hsmithdev.xyz/login
+SIGNUP_INVITE_URL=https://www.custom_domain.com/login
 RPM_SIGNUP_CODE=
 LC_SIGNUP_CODE=
 POST_HOG_API_KEY=
@@ -215,8 +215,6 @@ Use this when you want to run the app without dev reload:
 uv run fastapi run
 ```
 
-This is also the command used by the checked-in systemd service template in [`deploy/systemd/student-search-backend.service`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/deploy/systemd/student-search-backend.service).
-
 ## Environment Differences
 
 The code only treats `production` specially. Any other `ENVIRONMENT` value behaves like development/non-production.
@@ -228,8 +226,8 @@ The code only treats `production` specially. Any other `ENVIRONMENT` value behav
 - If `CORS_ORIGINS` is omitted, the backend falls back to these defaults:
   - `https://localhost`
   - `http://localhost`
-  - `https://hsmithtech.com`
-  - `https://www.hsmithtech.com`
+  - `https://custom_domain.com`
+  - `https://www.custom_domain.com`
   - `*`
 
 ### `ENVIRONMENT=production`
@@ -256,7 +254,6 @@ Typical local setup:
 
 - Frontend running separately on `http://127.0.0.1:3000`
 - Backend running on `http://127.0.0.1:8000`
-- Optional local nginx TLS proxy in [`nginx.conf`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/nginx.conf)
 
 Current proxy conventions:
 
@@ -266,11 +263,6 @@ Current proxy conventions:
 
 If you need local HTTPS for secure cookies, use the nginx-based setup and local certificates rather than talking to the backend directly over plain HTTP.
 
-## Unix / Linux Deployment Notes
-
-For Unix-style reverse proxying, see [`nginx_unix.conf`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/nginx_unix.conf).
-
-For the fuller Raspberry Pi deployment workflow, see [`Deployer.MD`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/Deployer.MD).
 
 The intended production shape is:
 
@@ -289,25 +281,6 @@ uv run fastapi dev
 uv run fastapi run
 ```
 
-Manual student refresh:
-
-```powershell
-uv run scripts/refresh_students.py
-```
-
-Testing helper to swap statuses:
-
-```powershell
-uv run scripts/switch_allocated_to_unassigned.py --count 5
-```
-
-News feed utilities:
-
-```powershell
-uv run scripts/clear_news_feed.py
-uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice
-```
-
 Placement metrics utilities:
 
 ```powershell
@@ -315,21 +288,36 @@ uv run python scripts/export_placement_data.py
 uv run python scripts/import_placement_metrics.py
 ```
 
-## API/Runtime Notes
 
-- Database initialization runs during app startup
-- Most routers are protected globally in `main.py`
-- `guest_search` and auth routes are public entry points
-- `POST /students/update_db` is the mutating refresh endpoint
-- WebSocket notifications are served from `/notifications/ws/placements`
-- The backend expects login cookies before a browser opens the WebSocket
 
-## Smoke Check
+## Future Improvements
 
-After startup, the main endpoints worth checking are:
+Today, this system depends on a server-side integration account to pull data from the upstream source and refresh the local database. That works well for speed and control, but it still means the application is operating as a separate layer beside the company’s main systems rather than as a native part of them.
 
-1. `POST /auth/login`
-2. `GET /auth/me`
-3. `POST /students/search`
-4. `GET /user/favorites`
-5. `POST /feedback/`
+### A More Native Company Integration
+
+The long-term improvement would be to connect this experience directly to the company’s core systems instead of relying on a separate refresh process to populate a local copy.
+
+In simple terms, that would mean:
+
+- student records would come from the company’s main system directly
+- account access could be tied to the company’s normal employee access model
+- updates would appear closer to real time
+- fewer manual refresh steps would be needed
+- the search tool would behave more like an internal company product than a standalone sync layer
+
+### What That Could Look Like
+
+A more native version of this product could be built in a few stages:
+
+1. Replace the current Beacon refresh pipeline with a supported or internal API integration.
+2. Use company-managed authentication so everyone signs in with their normal identity instead of a separate local account.
+3. Use already in place role-based access rules so each user only sees the records appropriate for their role.
+4. Move from periodic database refreshes to event-driven or near-real-time updates.
+5. Keep the fast search experience, favorites, notes, and placement workflows, but attach them directly to the company’s source of truth.
+
+### Why That Matters
+
+This would make the system easier to maintain, easier to govern, and easier to build new and enchanced functionality in the future. Instead of copying data into a separate tool and managing separate application accounts, the company could treat the search experience as a native operational layer on top of its existing platform.
+
+This approach would reduce duplication, improve data freshness, simplify user management, and make it easier to roll the tool out more broadly across teams.
