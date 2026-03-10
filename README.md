@@ -17,6 +17,88 @@ This backend fixes that by turning the data into an authenticated search experie
 
 At a high level, it works by pulling student data into a local application database, exposing that data through secure API endpoints, and requiring login cookies for protected features. That gives the frontend a reliable way to show searchable student records without exposing the full underlying data source directly.
 
+## Data Access and Separation
+
+Student search and filtering are performed inside this backend against the local SQLite database. The app does not depend on a third-party search engine, AI service, or external processing tool to search the student records.
+
+The upstream Beacon system is used only to refresh and hydrate the local database. End users do not authenticate against Beacon, and app account creation is fully separate from the Beacon credentials used by the server to populate data.
+
+In practice, that means:
+
+- user accounts belong to this application, not to the upstream data source
+- login and session cookies are managed locally by this backend
+- Beacon credentials are server-side configuration values in `.env`
+- full student detail routes and most operational routes require an authenticated account
+
+Optional route analytics can be enabled with `POST_HOG_API_KEY` and `POST_HOG_HOST`. If those values are left unset, the PostHog client stays disabled. Core search and filtering still run locally either way. This is currently being used to anonymously track the number of times searches are performed, as well as the number of individual student profiles are examined.
+
+## Data Cleaning and Privacy
+
+During refresh, the backend pulls source records from Beacon, reshapes them into a smaller application-specific format, and drops several direct identity and contact fields before writing to `student_full_view`.
+
+Fields explicitly removed during hydration include:
+
+- `emailaddress`
+- `namelast`
+- `namemiddle`
+- `birthcity`
+- `birthcountryid`
+- `birthcountry`
+- `residenceCountryId`
+- `genderid`
+- `productid`
+- `skypeid`
+- `atlasId`
+- `englishTest`
+- `hostFamily`
+- `schoolReady`
+
+This means the stored student search dataset is privacy-reduced rather than a raw copy of the upstream record. It intentionally avoids storing direct contact details and several full identity fields.
+
+The database retains the minimal operational identifiers such as `first_name`, `app_id`, `pax_id`, and `usahsid` because those are needed for search, matching, and linking records across the application.
+
+### `student_full_view` Stored Fields
+
+| Field | What it is used for |
+| --- | --- |
+| `id` | Internal primary key for the stored student record |
+| `first_name` | First-name display and lightweight text search |
+| `app_id` | Application identifier used to look up a student profile |
+| `pax_id` | Participant identifier retained for record linkage |
+| `country` | Country-of-origin filtering and display |
+| `gpa` | GPA display and minimum-GPA filtering |
+| `english_score` | English score display and comparison |
+| `applying_to_grade` | Grade-placement context |
+| `usahsid` | Program/student code used for lookup and grants logic |
+| `program_type` | Program term/type filtering |
+| `adjusted_age` | Search sorting and age-based filtering |
+| `selected_interests` | Structured interest matching |
+| `urban_request` | Placement preference display/filtering |
+| `placement_status` | Search status filtering and operational tracking |
+| `gender_desc` | Gender display/filtering |
+| `current_grade` | Current school-grade context |
+| `status` | Underlying application status |
+| `states` | Preferred-state filtering |
+| `early_placement` | Early-placement preference/flag |
+| `tuition_placement` | Tuition-placement flag |
+| `single_placement` | Single-placement preference |
+| `double_placement` | Double-placement preference |
+| `free_text_interests` | Additional searchable interest text |
+| `family_description` | Family preference/context text |
+| `favorite_subjects` | Searchable academic-interest text |
+| `photo_comments` | Searchable text extracted from photo comments |
+| `religion` | Religious-preference/search data |
+| `allergy_comments` | Searchable allergy notes |
+| `dietary_restrictions` | Searchable dietary notes |
+| `religious_frequency` | Religious-practice filtering |
+| `intro_message` | Searchable student introduction text |
+| `message_to_host_family` | Searchable host-family letter text |
+| `message_from_natural_family` | Searchable natural-family letter text |
+| `media_link` | Video/media availability |
+| `health_comments` | Searchable health-related notes |
+| `live_with_pets` | Pet compatibility filtering |
+| `local_coordinator` | Local coordinator assignment or display field |
+
 ## What This Repo Runs
 
 - FastAPI application entrypoint: `main.py`
