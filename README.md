@@ -1,119 +1,253 @@
-# Student Search API (Backend)
+# Student Search API Backend
 
-## Run
-- `uv run fastapi dev`
-- `uv run fastapi run`
-- `uv run scripts/refresh_students.py` (manual refresh script)
-- `uv run scripts/switch_allocated_to_unassigned.py --count 5` allows for easy swapping of students from allocated to unassigned for testing
-- `uv run scripts/clear_news_feed.py` clears all feed events and resets the event ID sequence
-- `uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice` inserts a feed event (`Unassigned -> Allocated`) that will be broadcast if websocket notifier is running
-- `uv run python scripts/export_placement_data.py` exports Beacon host placement payloads for placed students to `placement_data.json`
-- `uv run python scripts/import_placement_metrics.py` imports `placement_data.json` into `placement_metrics` (skips rows missing `placementDate`)
+FastAPI backend for student search, authentication, favorites, feedback, notifications, and Beacon-backed data refresh.
 
-## Placement Metrics Scripts
+## What This Is
 
-Use these scripts together for placement metrics debugging:
+This project is the backend for a student search system. Its job is to make student information easier to find, safer to access, and simpler to manage for the people who need it.
 
-1. Export placement data from Beacon for placed students:
+Without this functionality, there is no way to quickly, effectively, and accurately search the data based on information that is unavailable due to lack of a solution. That creates friction for those who need to find the right student, review details, track placement changes, or quickly keep track of important records for follow-up.
+
+This backend fixes that by turning the data into an authenticated search experience. In simple terms:
+
+- users sign in
+- the system checks what data they are allowed to access
+- the backend provides fast search and filtered results
+- related actions like favorites, feedback, and placement updates are handled in one place
+
+At a high level, it works by pulling student data into a local application database, exposing that data through secure API endpoints, and requiring login cookies for protected features. That gives the frontend a reliable way to show searchable student records without exposing the full underlying data source directly.
+
+## What This Repo Runs
+
+- FastAPI application entrypoint: `main.py`
+- SQLite database: `user_auth.db`
+- Environment/config loader: `core/config.py`
+- Local reverse proxy configs:
+  - Windows/local HTTPS: `nginx.conf`
+  - Unix/Linux proxying: `nginx_unix.conf`
+
+## Requirements
+
+- Python `>=3.9.2`
+- [`uv`](https://docs.astral.sh/uv/)
+- A `.env` file in the repo root
+- Beacon credentials if you need student refresh scripts or refresh endpoints
+
+## Quick Start
+
+1. Install dependencies:
+
 ```powershell
-uv run python scripts/export_placement_data.py
+uv sync
 ```
-This reads placed students from `student_full_view` and writes Beacon host information responses to `placement_data.json` at the repo root.
 
-2. Import placement metrics into SQLite:
+2. Create `.env` from the example:
+
 ```powershell
-uv run python scripts/import_placement_metrics.py
+Copy-Item .env.example .env
 ```
-This upserts into `placement_metrics` using:
-- `app_id` (primary key)
-- `city`
-- `state`
-- `placementDate` (required; records missing this are skipped)
 
-Optional: import from a custom JSON path:
+3. Update the values you actually need in `.env`.
+
+4. Start the API in development mode:
+
 ```powershell
-uv run python scripts/import_placement_metrics.py .\path\to\placement_data.json
+uv run fastapi dev
 ```
 
-## Local TLS Certificate (Linux/macOS)
-From `Backend/`, generate the local cert/key in the project root (`Student_Search/`):
+5. Production-style run command:
 
-```bash
-openssl req -x509 -nodes -newkey rsa:2048 \
-  -keyout ../localhost.key \
-  -out ../localhost.crt \
-  -days 365 \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```powershell
+uv run fastapi run
 ```
 
-Then update `nginx_unix.conf` certificate paths to match your Unix absolute path if needed.
+By default the app initializes the SQLite schema on startup and reads settings from `.env`.
 
-## .env Configuration
-The app now reads centralized settings from `.env` via `core/config.py`.
+## Required Setup
+
+At minimum, set or confirm these values in `.env`:
 
 ```env
-# Optional app settings
 APP_NAME=student-search-api
 ENVIRONMENT=development
-DOMAIN=your-domain.com
 DATABASE_PATH=./user_auth.db
 BEARER_TOKEN_PATH=./bearer_token
 CORS_ORIGINS=https://localhost,http://localhost,https://hsmithtech.com,https://www.hsmithtech.com,*
 
-# Beacon integration
+BEACON_USERNAME=
+BEACON_PASSWORD=
+```
+
+Useful optional settings already supported by the app:
+
+```env
 BEACON_BASE_URL=https://api.ciee.org
 BEACON_THREADS=16
 BEACON_TIMEOUT_SECONDS=30
 BEACON_MAX_RETRIES=3
 BEACON_RETRY_BACKOFF_SECONDS=1
+BEACON_STAGE1_PAGE_FETCH_WORKERS=4
+BEACON_STAGE1_DB_READ_WORKERS=16
+
 LOG_DIR=./log
 LOG_FILE_NAME=app.log
 LOG_LEVEL=INFO
 LOG_MAX_BYTES=5242880
 LOG_BACKUP_COUNT=5
 LOG_TO_CONSOLE=true
-BEACON_USERNAME=...
-BEACON_PASSWORD=...
+
+SMTP_USER=
+SMTP_PASS=
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_TIMEOUT_SECONDS=30
+SIGNUP_INVITE_URL=https://www.hsmithdev.xyz/login
+RPM_SIGNUP_CODE=
+LC_SIGNUP_CODE=
+POST_HOG_API_KEY=
+POST_HOG_HOST=
 ```
 
-When `ENVIRONMENT=production`, `DOMAIN` is required. CORS origins are automatically set to:
-- `http://localhost`
-- `https://localhost`
-- `http://<DOMAIN>`
-- `https://<DOMAIN>`
+## How To Run
 
-## API Notes
-- Student refresh endpoint is mutating and now uses `POST /students/update_db`.
-- News feed endpoint (read-only): `GET /news_feed?limit=100` returns placement event items ordered most-recent first, including `first_name`.
+### Development
 
-## WebSocket Notifications (Authenticated)
-- Endpoint: `ws://<host>/notifications/ws/placements` (or `wss://` in HTTPS environments)
-- Auth required: existing auth cookies from `POST /auth/login`
-- Cookie names used by backend:
-  - `session_id`
-  - `refresh_token`
-- Event emitted when a student changes from `Unassigned` to `Allocated`
+Use this when working locally and you want auto-reload:
 
-Example payload:
-```json
-{
-  "type": "student_became_allocated",
-  "event": {
-    "event_id": 123,
-    "student_id": 456,
-    "event_type": "status_changed",
-    "event_at": "2026-02-09T15:37:39.014138-05:00",
-    "placement_state": "Allocated",
-    "coordinator_id": null,
-    "manager_id": null,
-    "status_from": "Unassigned",
-    "status_to": "Allocated"
-  }
-}
+```powershell
+uv run fastapi dev
 ```
 
-Frontend notes:
-- Make sure login happens first so cookies exist before opening the WebSocket.
-- Browser WebSocket connections automatically include matching cookies for the socket URL domain.
-- If auth fails, backend rejects the connection with policy violation (`1008`).
+Expected behavior in development:
+
+- FastAPI docs are available at `/docs`
+- ReDoc is available at `/redoc`
+- OpenAPI JSON is available at `/openapi.json`
+- CORS uses `CORS_ORIGINS` from `.env`, or the built-in defaults if unset
+
+### Production-Style Local Run
+
+Use this when you want to run the app without dev reload:
+
+```powershell
+uv run fastapi run
+```
+
+This is also the command used by the checked-in systemd service template in [`deploy/systemd/student-search-backend.service`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/deploy/systemd/student-search-backend.service).
+
+## Environment Differences
+
+The code only treats `production` specially. Any other `ENVIRONMENT` value behaves like development/non-production.
+
+### `ENVIRONMENT=development` (or anything other than `production`)
+
+- API docs stay enabled
+- `CORS_ORIGINS` is read from `.env`
+- If `CORS_ORIGINS` is omitted, the backend falls back to these defaults:
+  - `https://localhost`
+  - `http://localhost`
+  - `https://hsmithtech.com`
+  - `https://www.hsmithtech.com`
+  - `*`
+
+### `ENVIRONMENT=production`
+
+- `DOMAIN` becomes required
+- `/docs`, `/redoc`, and `/openapi.json` are disabled
+- CORS is not taken from `CORS_ORIGINS`; it is derived from `DOMAIN`
+- Allowed origins become:
+  - `http://<DOMAIN>`
+  - `https://<DOMAIN>`
+
+### Important Auth/Proxy Behavior In Every Environment
+
+- Auth uses cookies, not bearer tokens for browser sessions
+- Session state and refresh tokens are stored in memory
+- Restarting the backend invalidates active sessions
+- Cookies are set with `secure=True` and `samesite="none"`
+- In practice, that means HTTPS should be used wherever browser auth needs to work reliably
+- Because sessions are in memory, run a single backend process for production deployment
+
+## Local Development Layout
+
+Typical local setup:
+
+- Frontend running separately on `http://127.0.0.1:3000`
+- Backend running on `http://127.0.0.1:8000`
+- Optional local nginx TLS proxy in [`nginx.conf`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/nginx.conf)
+
+Current proxy conventions:
+
+- Frontend served from `/`
+- Backend proxied under `/api/`
+- WebSocket endpoint exposed at `/notifications/ws/placements`
+
+If you need local HTTPS for secure cookies, use the nginx-based setup and local certificates rather than talking to the backend directly over plain HTTP.
+
+## Unix / Linux Deployment Notes
+
+For Unix-style reverse proxying, see [`nginx_unix.conf`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/nginx_unix.conf).
+
+For the fuller Raspberry Pi deployment workflow, see [`Deployer.MD`](/c:/Users/Harrison/Desktop/Development/Student_Search/Backend/Deployer.MD).
+
+The intended production shape is:
+
+- nginx in front
+- frontend served separately
+- FastAPI backend running locally on port `8000`
+- SQLite stored on disk on the same machine
+- one backend process only
+
+## Common Commands
+
+Run the API:
+
+```powershell
+uv run fastapi dev
+uv run fastapi run
+```
+
+Manual student refresh:
+
+```powershell
+uv run scripts/refresh_students.py
+```
+
+Testing helper to swap statuses:
+
+```powershell
+uv run scripts/switch_allocated_to_unassigned.py --count 5
+```
+
+News feed utilities:
+
+```powershell
+uv run scripts/clear_news_feed.py
+uv run scripts/add_news_feed_event.py --student-id 12345 --first-name Alice
+```
+
+Placement metrics utilities:
+
+```powershell
+uv run python scripts/export_placement_data.py
+uv run python scripts/import_placement_metrics.py
+```
+
+## API/Runtime Notes
+
+- Database initialization runs during app startup
+- Most routers are protected globally in `main.py`
+- `guest_search` and auth routes are public entry points
+- `POST /students/update_db` is the mutating refresh endpoint
+- WebSocket notifications are served from `/notifications/ws/placements`
+- The backend expects login cookies before a browser opens the WebSocket
+
+## Smoke Check
+
+After startup, the main endpoints worth checking are:
+
+1. `POST /auth/login`
+2. `GET /auth/me`
+3. `POST /students/search`
+4. `GET /user/favorites`
+5. `POST /feedback/`
