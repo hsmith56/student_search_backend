@@ -10,7 +10,7 @@ FilterStep = Callable[[list[FullStudent], SearchFilters], list[FullStudent]]
 
 
 PHOTO_MATCH_THRESHOLD: Final[int] = 86
-FREE_TEXT_RATIO_THRESHOLD: Final[int] = 86
+FREE_TEXT_RATIO_THRESHOLD: Final[int] = 88
 
 
 def _normalized_tuple_values(values: Optional[tuple[str, ...]]) -> list[str]:
