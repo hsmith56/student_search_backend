@@ -11,7 +11,6 @@ FilterStep = Callable[[list[FullStudent], SearchFilters], list[FullStudent]]
 
 PHOTO_MATCH_THRESHOLD: Final[int] = 86
 FREE_TEXT_RATIO_THRESHOLD: Final[int] = 86
-FREE_TEXT_PARTIAL_THRESHOLD: Final[int] = 80
 
 
 def _normalized_tuple_values(values: Optional[tuple[str, ...]]) -> list[str]:
@@ -291,7 +290,7 @@ def _matches_free_text(search_query: str, student: FullStudent) -> bool:
             " ".join(w for w in student.free_text_interests),
             processor=utils.default_process,
         )
-        >= FREE_TEXT_PARTIAL_THRESHOLD
+        >= FREE_TEXT_RATIO_THRESHOLD
     ):
         return True
     if (
