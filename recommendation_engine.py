@@ -140,6 +140,16 @@ def _parse_selected_interests(value: Any) -> list[str]:
     return _dedupe_preserving_order(filtered_values)
 
 
+def _resolve_gender_requirement(gender: int) -> str | None:
+    if gender == 0:
+        return None
+    if gender == 1:
+        return "male"
+    if gender == 2:
+        return "female"
+    raise ValueError("gender must be 0, 1, or 2")
+
+
 def _parse_state_preferences(value: Any) -> set[str]:
     if value in (None, ""):
         return set()
@@ -733,16 +743,30 @@ def _rank_candidates(
     return ranked
 
 
+def _filter_candidates_by_gender(
+    candidates: list[StudentProfile], gender_requirement: str | None
+) -> list[StudentProfile]:
+    if gender_requirement is None:
+        return candidates
+    return [
+        candidate
+        for candidate in candidates
+        if _normalize(candidate.gender_desc) == gender_requirement
+    ]
+
+
 def get_recommendations(
     usahsid: str,
     n: int = 10,
     compare: str = "all",
     username: str | None = None,
     priority_interests: list[str] | None = None,
+    gender: int = 0,
 ) -> list[Recommendation]:
     if n <= 0:
         raise ValueError("n must be greater than 0")
     normalized_priority_interests = _parse_selected_interests(priority_interests)
+    gender_requirement = _resolve_gender_requirement(gender)
 
     with get_connection() as connection:
         baseline = _load_student_by_usahsid(connection, usahsid)
@@ -763,6 +787,7 @@ def get_recommendations(
 
         candidates = _load_all_other_students(connection, baseline.app_id)
         candidates = _filter_by_scope(candidates, compare)
+        candidates = _filter_candidates_by_gender(candidates, gender_requirement)
 
         extracurricular_matches, remaining_candidates = (
             _split_candidates_by_baseline_extracurricular_match(baseline, candidates)

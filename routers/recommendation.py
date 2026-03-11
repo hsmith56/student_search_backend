@@ -14,6 +14,7 @@ class RecommendationRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=100)
     compare: str = Field(default="allocated", min_length=1)
     priority_interests: list[str] = Field(default_factory=list)
+    gender: int = Field(default=0, ge=0, le=2)
 
 
 class RecommendationItem(BaseModel):
@@ -39,6 +40,7 @@ def create_recommendations(
             compare=payload.compare,
             username=current_user["username"],
             priority_interests=payload.priority_interests,
+            gender=payload.gender,
         )
     except ValueError as exc:
         detail = str(exc)
