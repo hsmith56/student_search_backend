@@ -245,6 +245,21 @@ def _shorten(text: str, max_len: int = 48) -> str:
     return f"{text[: max_len - 3]}..."
 
 
+def _shorter_interest_label(left: str, right: str) -> str:
+    normalized_left = _clean_interest_text(left)
+    normalized_right = _clean_interest_text(right)
+    if normalized_left == "":
+        return normalized_right
+    if normalized_right == "":
+        return normalized_left
+
+    left_key = (len(normalized_left.split()), len(normalized_left))
+    right_key = (len(normalized_right.split()), len(normalized_right))
+    if left_key <= right_key:
+        return normalized_left
+    return normalized_right
+
+
 def _candidate_interest_terms(student: StudentProfile) -> list[str]:
     terms: list[str] = []
     for item in student.selected_interests:
@@ -318,8 +333,9 @@ def _fuzzy_extracurricular_overlap(
         if ratio >= threshold:
             matched_count += 1
             ratio_sum += ratio
-            if matched_term != "" and matched_term not in matched_terms:
-                matched_terms.append(matched_term)
+            display_term = _shorter_interest_label(baseline_term, matched_term)
+            if display_term != "" and display_term not in matched_terms:
+                matched_terms.append(display_term)
 
     if matched_count == 0:
         return 0, 0.0, []
@@ -362,7 +378,7 @@ def _fuzzy_baseline_primary_overlap(
             fuzz.ratio(term, baseline_text) / 100.0,
         )
         if ratio >= threshold:
-            matched.append((term, ratio))
+            matched.append((_shorter_interest_label(baseline_text, term), ratio))
 
     if not matched:
         return 0, 0.0, []
