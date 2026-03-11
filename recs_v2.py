@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from core.config import settings
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, utils
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,7 @@ class StudentProfile:
     gpa: float | None
     english_score: float | None
     selected_interests: list[str]
+    free_text_interests: list[str]
     extracurricular_interest: str
     states: set[str]
     urban_request: str
@@ -216,7 +217,8 @@ def _candidate_interest_terms(student: StudentProfile) -> list[str]:
         cleaned = _clean_interest_text(item)
         if cleaned != "":
             terms.append(cleaned)
-    terms.extend(_split_interest_phrases(student.extracurricular_interest))
+    for item in student.free_text_interests:
+        terms.extend(_split_interest_phrases(item))
     seen: set[str] = set()
     ordered: list[str] = []
     for term in terms:
@@ -224,6 +226,42 @@ def _candidate_interest_terms(student: StudentProfile) -> list[str]:
             seen.add(term)
             ordered.append(term)
     return ordered
+
+
+def _extracurricular_search_blob(student: StudentProfile) -> str:
+    return " ".join(item for item in student.free_text_interests if _normalize(item))
+
+
+def _split_candidates_by_baseline_extracurricular_match(
+    baseline: StudentProfile,
+    candidates: list[StudentProfile],
+    threshold: int = 90,
+    limit: int = 5,
+) -> tuple[list[StudentProfile], list[StudentProfile]]:
+    baseline_text = baseline.extracurricular_interest
+    if baseline_text == "" or limit <= 0:
+        return [], candidates
+
+    matched: list[StudentProfile] = []
+    remaining: list[StudentProfile] = []
+    for index, candidate in enumerate(candidates):
+        candidate_blob = _extracurricular_search_blob(candidate)
+        if candidate_blob != "" and (
+            fuzz.partial_ratio(
+                baseline_text,
+                candidate_blob,
+                processor=utils.default_process,
+            )
+            >= threshold
+        ):
+            matched.append(candidate)
+            if len(matched) >= limit:
+                remaining.extend(candidates[index + 1 :])
+                break
+            continue
+        remaining.append(candidate)
+
+    return matched, remaining
 
 
 def _fuzzy_extracurricular_overlap(
@@ -322,6 +360,7 @@ def _fuzzy_baseline_primary_overlap(
 
 
 def _row_to_student(row: sqlite3.Row) -> StudentProfile:
+    free_text_interests = _parse_json_list(row["free_text_interests"])
     return StudentProfile(
         app_id=int(row["app_id"]),
         usahsid=str(row["usahsid"] or ""),
@@ -335,9 +374,8 @@ def _row_to_student(row: sqlite3.Row) -> StudentProfile:
         gpa=_parse_float(row["gpa"]),
         english_score=_parse_float(row["english_score"]),
         selected_interests=_parse_json_list(row["selected_interests"]),
-        extracurricular_interest=_parse_primary_extracurricular(
-            row["free_text_interests"]
-        ),
+        free_text_interests=free_text_interests,
+        extracurricular_interest=_parse_primary_extracurricular(free_text_interests),
         states=_parse_json_set(row["states"]),
         urban_request=str(row["urban_request"] or ""),
         single_placement=_parse_bool(row["single_placement"]),
@@ -616,6 +654,48 @@ def _score_candidate(
     return round(score, 4), interest_overlap, state_overlap, reasons
 
 
+def _rank_candidates(
+    candidates: list[StudentProfile],
+    baseline: StudentProfile,
+    state_reference: set[str],
+    state_reason_label: str,
+    priority_interests: list[str] | None = None,
+) -> list[Recommendation]:
+    ranked: list[Recommendation] = []
+    for candidate in candidates:
+        score, interest_overlap, state_overlap, reasons = _score_candidate(
+            baseline,
+            candidate,
+            state_reference,
+            state_reason_label,
+            priority_interests=priority_interests,
+        )
+        if score <= 0:
+            continue
+        ranked.append(
+            Recommendation(
+                app_id=candidate.app_id,
+                usahsid=candidate.usahsid,
+                first_name=candidate.first_name,
+                placement_status=candidate.placement_status,
+                score=score,
+                interest_overlap=interest_overlap,
+                state_overlap=state_overlap,
+                reasons=reasons,
+            )
+        )
+
+    ranked.sort(
+        key=lambda item: (
+            -item.score,
+            -item.interest_overlap,
+            -item.state_overlap,
+            item.app_id,
+        )
+    )
+    return ranked
+
+
 def get_recommendations(
     usahsid: str,
     n: int = 10,
@@ -646,39 +726,27 @@ def get_recommendations(
         candidates = _load_all_other_students(connection, baseline.app_id)
         candidates = _filter_by_scope(candidates, compare)
 
-        ranked: list[Recommendation] = []
-        for candidate in candidates:
-            score, interest_overlap, state_overlap, reasons = _score_candidate(
-                baseline,
-                candidate,
-                state_reference,
-                state_reason_label,
-                priority_interests=priority_interests,
-            )
-            if score <= 0:
-                continue
-            ranked.append(
-                Recommendation(
-                    app_id=candidate.app_id,
-                    usahsid=candidate.usahsid,
-                    first_name=candidate.first_name,
-                    placement_status=candidate.placement_status,
-                    score=score,
-                    interest_overlap=interest_overlap,
-                    state_overlap=state_overlap,
-                    reasons=reasons,
-                )
-            )
-
-        ranked.sort(
-            key=lambda item: (
-                -item.score,
-                -item.interest_overlap,
-                -item.state_overlap,
-                item.app_id,
-            )
+        extracurricular_matches, remaining_candidates = (
+            _split_candidates_by_baseline_extracurricular_match(baseline, candidates)
         )
-        return ranked[:n]
+        prioritized_ranked = _rank_candidates(
+            extracurricular_matches,
+            baseline,
+            state_reference,
+            state_reason_label,
+            priority_interests=priority_interests,
+        )
+        if len(prioritized_ranked) >= n:
+            return prioritized_ranked[:n]
+
+        fallback_ranked = _rank_candidates(
+            remaining_candidates,
+            baseline,
+            state_reference,
+            state_reason_label,
+            priority_interests=priority_interests,
+        )
+        return (prioritized_ranked + fallback_ranked)[:n]
 
 
 def _format_recommendations_table(
