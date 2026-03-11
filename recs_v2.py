@@ -43,7 +43,7 @@ class Recommendation:
     score: float
     interest_overlap: int
     state_overlap: int
-    reasons: list[str]
+    reasons: dict[str, Any]
 
 
 def get_connection() -> sqlite3.Connection:
@@ -278,16 +278,14 @@ def _fuzzy_extracurricular_overlap(
 
     matched_count = 0
     ratio_sum = 0.0
-    examples: list[str] = []
+    matched_terms: list[str] = []
     for baseline_term in baseline_terms:
         ratio, matched_term = _best_fuzzy_match(baseline_term, candidate_terms)
         if ratio >= threshold:
             matched_count += 1
             ratio_sum += ratio
-            if len(examples) < 3:
-                examples.append(
-                    f"{_shorten(baseline_term)}~{_shorten(matched_term)} ({ratio:.2f})"
-                )
+            if matched_term != "" and matched_term not in matched_terms:
+                matched_terms.append(matched_term)
 
     if matched_count == 0:
         return 0, 0.0, []
@@ -295,7 +293,7 @@ def _fuzzy_extracurricular_overlap(
     avg_ratio = ratio_sum / matched_count
     coverage = matched_count / max(1, len(baseline_terms))
     overlap_strength = min(1.0, avg_ratio * coverage * 1.25)
-    return matched_count, overlap_strength, examples
+    return matched_count, overlap_strength, matched_terms[:3]
 
 
 def _fuzzy_baseline_primary_overlap(
@@ -351,12 +349,9 @@ def _fuzzy_baseline_primary_overlap(
     avg_ratio = ratio_sum / matched_count
     coverage = min(1.0, matched_count / 3.0)
     overlap_strength = min(1.0, avg_ratio * coverage * 1.15)
-    examples = [
-        f"{_shorten(term)}~baseline_extracurricular[0] ({ratio:.2f})"
-        for term, ratio in deduped[:3]
-    ]
+    matched_terms = [term for term, _ in deduped[:3]]
 
-    return matched_count, overlap_strength, examples
+    return matched_count, overlap_strength, matched_terms
 
 
 def _row_to_student(row: sqlite3.Row) -> StudentProfile:
@@ -493,9 +488,33 @@ def _score_candidate(
     state_reference: set[str],
     state_reason_label: str,
     priority_interests: list[str] | None = None,
-) -> tuple[float, int, int, list[str]]:
+) -> tuple[float, int, int, dict[str, Any]]:
     score = 0.0
-    reasons: list[str] = []
+    shared_interests: list[str] = []
+    matched_priority_interests: list[str] = []
+    extra_interest_terms: list[str] = []
+    explanation: dict[str, Any] = {
+        "shared_interests": shared_interests,
+        "priority_interests": matched_priority_interests,
+        "extra_interests": "",
+        "extra_interests_match": False,
+        "shared_states": [],
+        "used_user_preferred_states": state_reason_label == "user preferred state overlap",
+        "state_match": False,
+        "same_country": False,
+        "same_program": False,
+        "same_gender": False,
+        "same_applying_grade": False,
+        "similar_applying_grade": False,
+        "same_age": False,
+        "similar_age": False,
+        "similar_gpa": False,
+        "similar_english_score": False,
+        "same_urban_request": False,
+        "single_placement_match": False,
+        "double_placement_match": False,
+        "pets_preference_match": False,
+    }
 
     baseline_interest_set = set(baseline.selected_interests)
     candidate_interest_set = set(candidate.selected_interests)
@@ -504,32 +523,27 @@ def _score_candidate(
     )
     if interest_overlap > 0:
         score += 100.0 * interest_jaccard
-        shared_interests = sorted(
-            baseline_interest_set.intersection(candidate_interest_set)
-        )
-        reasons.append(
-            f"shared interests ({interest_overlap}): {', '.join(shared_interests[:6])}"
+        shared_interests.extend(
+            sorted(baseline_interest_set.intersection(candidate_interest_set))[:6]
         )
 
-    fuzzy_overlap_count, fuzzy_overlap_strength, fuzzy_examples = (
+    fuzzy_overlap_count, fuzzy_overlap_strength, fuzzy_matches = (
         _fuzzy_extracurricular_overlap(baseline, candidate)
     )
     if fuzzy_overlap_count > 0:
         score += 18.0 * fuzzy_overlap_strength
-        reasons.append(
-            f"fuzzy extracurricular overlap ({fuzzy_overlap_count}): "
-            f"{', '.join(fuzzy_examples)}"
-        )
+        for term in fuzzy_matches:
+            if term not in extra_interest_terms:
+                extra_interest_terms.append(term)
 
-    baseline_primary_count, baseline_primary_strength, baseline_primary_examples = (
+    baseline_primary_count, baseline_primary_strength, baseline_primary_matches = (
         _fuzzy_baseline_primary_overlap(baseline, candidate)
     )
     if baseline_primary_count > 0:
         score += 30.0 * baseline_primary_strength
-        reasons.append(
-            "baseline extracurricular[0] overlap "
-            f"({baseline_primary_count}): {', '.join(baseline_primary_examples)}"
-        )
+        for term in baseline_primary_matches:
+            if term not in extra_interest_terms:
+                extra_interest_terms.append(term)
 
     candidate_interest_terms = _candidate_interest_terms(candidate)
     for priority_interest in priority_interests or []:
@@ -542,45 +556,40 @@ def _score_candidate(
         )
         if priority_ratio >= 0.90:
             score += 30.0
-            reasons.append(
-                f"priority interest fuzzy match: {normalized_priority_interest}~"
-                f"{_shorten(priority_match)} ({priority_ratio:.2f})"
-            )
+            if normalized_priority_interest not in matched_priority_interests:
+                matched_priority_interests.append(normalized_priority_interest)
         elif priority_ratio >= 0.82:
             score += 24.0
-            reasons.append(
-                f"priority interest fuzzy match: {normalized_priority_interest}~"
-                f"{_shorten(priority_match)} ({priority_ratio:.2f})"
-            )
+            if normalized_priority_interest not in matched_priority_interests:
+                matched_priority_interests.append(normalized_priority_interest)
         elif priority_ratio >= 0.75:
             score += 16.0
-            reasons.append(
-                f"priority interest fuzzy match: {normalized_priority_interest}~"
-                f"{_shorten(priority_match)} ({priority_ratio:.2f})"
-            )
+            if normalized_priority_interest not in matched_priority_interests:
+                matched_priority_interests.append(normalized_priority_interest)
 
     state_overlap, state_jaccard = _jaccard_overlap(state_reference, candidate.states)
     if state_overlap > 0:
         score += 40.0 * state_jaccard
-        reasons.append(f"{state_reason_label} ({state_overlap})")
+        explanation["state_match"] = True
+        explanation["shared_states"] = sorted(state_reference.intersection(candidate.states))
 
     if _normalize(baseline.country) and _normalize(baseline.country) == _normalize(
         candidate.country
     ):
         score += 15.0
-        reasons.append("same country")
+        explanation["same_country"] = True
 
     if _normalize(baseline.program_type) and _normalize(
         baseline.program_type
     ) == _normalize(candidate.program_type):
         score += 15.0
-        reasons.append("same program")
+        explanation["same_program"] = True
 
     if _normalize(baseline.gender_desc) and _normalize(baseline.gender_desc) == _normalize(
         candidate.gender_desc
     ):
         score += 7.0
-        reasons.append("same gender")
+        explanation["same_gender"] = True
 
     if (
         baseline.applying_to_grade is not None
@@ -589,43 +598,43 @@ def _score_candidate(
         grade_diff = abs(baseline.applying_to_grade - candidate.applying_to_grade)
         if grade_diff == 0:
             score += 11.0
-            reasons.append("same applying grade")
+            explanation["same_applying_grade"] = True
         elif grade_diff == 1:
             score += 6.0
-            reasons.append("near applying grade")
+            explanation["similar_applying_grade"] = True
 
     if baseline.adjusted_age is not None and candidate.adjusted_age is not None:
         age_diff = abs(baseline.adjusted_age - candidate.adjusted_age)
         if age_diff == 0:
             score += 8.0
-            reasons.append("same age")
+            explanation["same_age"] = True
         elif age_diff == 1:
             score += 5.0
-            reasons.append(f"1 year {'older' if candidate.adjusted_age > baseline.adjusted_age else 'younger'}")
+            explanation["similar_age"] = True
 
     if baseline.gpa is not None and candidate.gpa is not None:
         gpa_diff = abs(baseline.gpa - candidate.gpa)
         if gpa_diff <= 0.20:
             score += 9.0
-            reasons.append("very close GPA")
+            explanation["similar_gpa"] = True
         elif gpa_diff <= 0.50:
             score += 5.0
-            reasons.append("close GPA")
+            explanation["similar_gpa"] = True
 
     if baseline.english_score is not None and candidate.english_score is not None:
         english_diff = abs(baseline.english_score - candidate.english_score)
         if english_diff <= 5:
             score += 6.0
-            reasons.append("very close English score")
+            explanation["similar_english_score"] = True
         elif english_diff <= 10:
             score += 4.0
-            reasons.append("close English score")
+            explanation["similar_english_score"] = True
 
     if _normalize(baseline.urban_request) and _normalize(baseline.urban_request) == _normalize(
         candidate.urban_request
     ):
         score += 3.0
-        reasons.append("same urban request")
+        explanation["same_urban_request"] = True
 
     if (
         baseline.single_placement is not None
@@ -633,7 +642,7 @@ def _score_candidate(
         and baseline.single_placement == candidate.single_placement
     ):
         score += 2.0
-        reasons.append("single placement preference match")
+        explanation["single_placement_match"] = True
 
     if (
         baseline.double_placement is not None
@@ -641,7 +650,7 @@ def _score_candidate(
         and baseline.double_placement == candidate.double_placement
     ):
         score += 2.0
-        reasons.append("double placement preference match")
+        explanation["double_placement_match"] = True
 
     if (
         baseline.live_with_pets is not None
@@ -649,9 +658,13 @@ def _score_candidate(
         and baseline.live_with_pets == candidate.live_with_pets
     ):
         score += 2.0
-        reasons.append("pets preference match")
+        explanation["pets_preference_match"] = True
 
-    return round(score, 4), interest_overlap, state_overlap, reasons
+    if extra_interest_terms:
+        explanation["extra_interests"] = ", ".join(extra_interest_terms[:3])
+        explanation["extra_interests_match"] = True
+
+    return round(score, 4), interest_overlap, state_overlap, explanation
 
 
 def _rank_candidates(
@@ -783,7 +796,7 @@ def _format_recommendations_table(
             f"name={rec.first_name} | status={rec.placement_status} | "
             f"score={rec.score:.2f} | interest_overlap={rec.interest_overlap}"
         )
-        lines.append(f"   reasons: {', '.join(rec.reasons)}")
+        lines.append(f"   reasons: {json.dumps(rec.reasons, sort_keys=True)}")
     return "\n".join(lines)
 
 
