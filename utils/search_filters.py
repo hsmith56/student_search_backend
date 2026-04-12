@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
@@ -234,6 +235,25 @@ def _filter_photo_search(students: list[FullStudent], filters: SearchFilters) ->
 
 
 def _matches_free_text(search_query: str, student: FullStudent) -> bool:
+    search_query = search_query.strip()
+    if not search_query:
+        return False
+
+    or_terms = [term.strip() for term in re.split(r"\|", search_query) if term.strip()]
+    if not or_terms:
+        return False
+
+    return any(_matches_free_text_and_clause(and_clause, student) for and_clause in or_terms)
+
+
+def _matches_free_text_and_clause(and_clause: str, student: FullStudent) -> bool:
+    and_terms = [term.strip() for term in re.split(r"&", and_clause) if term.strip()]
+    if not and_terms:
+        return False
+    return all(_matches_free_text_term(term, student) for term in and_terms)
+
+
+def _matches_free_text_term(search_query: str, student: FullStudent) -> bool:
     if (
         fuzz.ratio(search_query, student.first_name, processor=utils.default_process)
         >= FREE_TEXT_RATIO_THRESHOLD
