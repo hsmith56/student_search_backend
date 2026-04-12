@@ -84,11 +84,12 @@ def _filter_state(students: list[FullStudent], filters: SearchFilters) -> list[F
 
 
 def _filter_interests(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
-    if filters.interests is None or filters.interests == "all":
+    logger.info(f"Search filter - {filters.interests}")
+    interest_filters = _normalized_tuple_values(filters.interests)
+    if interest_filters is None or interest_filters == ["all"]:
         return students
-    if students:
-        logger.debug("Selected interests sample=%s", students[0].selected_interests)
-    return [student for student in students if filters.interests in student.selected_interests]
+
+    return [student for student in students if len(set(interest_filters) & set([n_int.lower() for n_int in student.selected_interests])) >= 1]
 
 
 def _filter_gpa(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
