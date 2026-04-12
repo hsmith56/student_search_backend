@@ -24,6 +24,7 @@ class SearchFilters(BaseModel, frozen=True):
     early_placement: Optional[str] = None  # done
     hasVideo: Optional[bool] = None  # done
     statusOptions: Optional[Tuple[str, ...]] = None  # done
+    only_favorites: Optional[bool] = None
 
     @field_validator("state", mode="before")
     @classmethod

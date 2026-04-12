@@ -85,7 +85,6 @@ def _filter_state(students: list[FullStudent], filters: SearchFilters) -> list[F
 
 
 def _filter_interests(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
-    logger.info(f"Search filter - {filters.interests}")
     interest_filters = _normalized_tuple_values(filters.interests)
     if interest_filters is None or interest_filters == ["all"]:
         return students

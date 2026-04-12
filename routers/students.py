@@ -1,11 +1,12 @@
 import logging
 import time
+import json
 from datetime import datetime, timedelta
 
 import pytz
 
 from repositories.admin import get_last_update_datetime, update_time
-from repositories.students import get_all_full_students, get_full_student_by_id
+from repositories.students import get_all_full_students, get_favorites, get_full_student_by_id
 from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
 from enum import Enum
@@ -47,8 +48,15 @@ def get_full_student(app_id: int) -> FullStudent:
 
 
 @lru_cache(maxsize=128)
-def apply_filters(filters: SearchFilters) -> list[FullStudent]:
-    return filter_students(students=get_all_full_students(), filters=filters)
+def apply_filters(
+    filters: SearchFilters, favorite_student_ids: tuple[int, ...] 
+) -> list[FullStudent]:
+    students = (
+        get_favorites(list(favorite_student_ids))
+        if favorite_student_ids is not None
+        else get_all_full_students()
+    )
+    return filter_students(students=students, filters=filters)
 
 
 def run_student_search(
@@ -56,10 +64,32 @@ def run_student_search(
     page: int,
     page_size: int,
     params: ItemQueryParams,
+    current_user: dict,
 ) -> dict[str, Any]:
     logger.debug("student search filters=%s", filters.model_dump())
 
-    results: list[FullStudent] = apply_filters(filters)  # pyright: ignore[reportRedeclaration, reportAssignmentType]
+    favorite_student_ids: tuple[int, ...] | None = None
+    if filters.only_favorites:
+        favorites_raw = (
+            current_user["favorites"]
+        )
+        logger.info(f"Raw - {favorites_raw}")
+        parsed_favorites: list[int] = []
+        if favorites_raw:
+            try:
+                favorites = json.loads(favorites_raw)
+                parsed_favorites = [
+                    int(favorite)
+                    for favorite in favorites
+                    if isinstance(favorite, (int, str)) and str(favorite).strip().isdigit()
+                ]
+            except (json.JSONDecodeError, TypeError, ValueError):
+                parsed_favorites = []
+        favorite_student_ids = tuple(parsed_favorites)
+
+    results: list[FullStudent] = apply_filters(  # pyright: ignore[reportRedeclaration, reportAssignmentType]
+        filters, favorite_student_ids
+    )
 
     results: list[FullStudent] = sorted(  # pyright: ignore[reportRedeclaration]
         results,
@@ -89,9 +119,14 @@ def search(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=21, ge=1, le=100),
     params: ItemQueryParams = Depends(),
+    current_user: dict = Depends(get_current_user),
 ):
     return run_student_search(
-        filters=filters, page=page, page_size=page_size, params=params
+        filters=filters,
+        page=page,
+        page_size=page_size,
+        params=params,
+        current_user=current_user,
     )
 
 
