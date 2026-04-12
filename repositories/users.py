@@ -610,6 +610,23 @@ def update_user_submitter_id_by_id(*, user_id: str, submitter_id: str | None) ->
     return update_user_manager_id_by_id(user_id=user_id, manager_id=submitter_id)
 
 
+def update_user_password_by_id(*, user_id: str, hashed_password: str) -> bool:
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    UPDATE users
+    SET hashed_password = ?
+    WHERE id = ?
+    """,
+        (hashed_password, user_id),
+    )
+    updated = cursor.rowcount > 0
+    connection.commit()
+    connection.close()
+    return updated
+
+
 def delete_user(username) -> None:
     connection = get_connection()
     cursor = connection.cursor()

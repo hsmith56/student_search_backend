@@ -10,6 +10,7 @@ from repositories.users import (
     complete_signup_registration,
     get_pending_user_by_signup_code,
     read_user,
+    update_user_password_by_id,
 )
 
 SESSION_COOKIE_NAME = "session_id"
@@ -225,6 +226,23 @@ class CreateUserRequest(BaseModel):
     password: str
     first_name: str
     signup_code: str
+
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+
+
+@router.post(path="/change_password")
+def change_password(
+    payload: ChangePasswordRequest, current_user: dict = Depends(dependency=get_current_user)
+):
+    updated = update_user_password_by_id(
+        user_id=current_user["id"],
+        hashed_password=hash_password(password=payload.new_password),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found in database")
+    return {"message": "Password changed successfully"}
 
 
 @router.post(path="/register")
