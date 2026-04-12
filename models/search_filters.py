@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 class SearchFilters(BaseModel, frozen=True):
     gender_female: Optional[bool] = None  # done
     gender_male: Optional[bool] = None  # done
+    urban_request: Optional[bool] = None # done
     state: Optional[Tuple[str, ...]] = None  # done
     interests: Optional[str] = None  # done
     gpa: Optional[str] = None  # done

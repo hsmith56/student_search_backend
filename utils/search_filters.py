@@ -33,6 +33,13 @@ def _filter_status_options(
     ]
 
 
+def _filter_urban_request(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
+    if filters.urban_request is False:
+        return students
+    
+    return [student for student in students if "Urban" in student.urban_request]
+
+
 def _filter_gender(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
     if filters.gender_female is None or filters.gender_male is None:
         return students
@@ -333,6 +340,7 @@ FilterSpec = tuple[str, FilterStep]
 _FILTER_STEPS: Final[Sequence[FilterSpec]] = (
     ("status_options", _filter_status_options),
     ("gender", _filter_gender),
+    ("urban", _filter_urban_request),
     ("state", _filter_state),
     ("interests", _filter_interests),
     ("gpa", _filter_gpa),
