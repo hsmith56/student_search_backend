@@ -151,6 +151,11 @@ def get_current_user(
     return user
 
 
+def _require_rpm_or_admin(current_user: dict) -> None:
+    if current_user["account_type"] not in {"admin", "rpm"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 @router.post(path="/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     user = read_user(username=form_data.username)
@@ -232,6 +237,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class ResetUserPasswordRequest(BaseModel):
+    temp_password: str
+    user_id: str
+
+
 @router.post(path="/change_password")
 def change_password(
     payload: ChangePasswordRequest, current_user: dict = Depends(dependency=get_current_user)
@@ -243,6 +253,26 @@ def change_password(
     if not updated:
         raise HTTPException(status_code=404, detail="User not found in database")
     return {"message": "Password changed successfully"}
+
+
+@router.post(path="/reset_password")
+def reset_password(
+    payload: ResetUserPasswordRequest, current_user: dict = Depends(dependency=get_current_user)
+):
+    _require_rpm_or_admin(current_user=current_user)
+
+    target_user = read_user(user_id=payload.user_id)
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    updated = update_user_password_by_id(
+        user_id=payload.user_id,
+        hashed_password=hash_password(password=payload.temp_password),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    return {"message": "Temporary password reset successfully"}
 
 
 @router.post(path="/register")
