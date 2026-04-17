@@ -2,6 +2,7 @@ import itertools
 import json
 import logging
 import sqlite3
+from functools import lru_cache
 from typing import Any
 
 from models.student import FullStudent
@@ -79,6 +80,7 @@ def update_student_status_full(
                     (placement_status, app_id),
                 )
             connection.commit()
+            clear_student_full_view_cache()
 
     except Exception as e:
         logger.warning(f"Student - {app_id}: {e}")
@@ -271,6 +273,7 @@ def insert_full_student(student):
 
     connection.commit()
     connection.close()
+    clear_student_full_view_cache()
 
 
 def row_to_student(row) -> FullStudent:
@@ -316,14 +319,23 @@ def row_to_student(row) -> FullStudent:
     )
 
 
-def get_all_full_students() -> list[FullStudent]:
+def clear_student_full_view_cache() -> None:
+    _get_all_full_students_cached.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def _get_all_full_students_cached() -> tuple[FullStudent, ...]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
 
     cursor.execute("SELECT * FROM student_full_view")
-    list_of_all_students = [row_to_student(row) for row in cursor.fetchall()]
+    list_of_all_students = tuple(row_to_student(row) for row in cursor.fetchall())
     connection.close()
     return list_of_all_students
+
+
+def get_all_full_students() -> list[FullStudent]:
+    return list(_get_all_full_students_cached())
 
 
 def get_full_student_by_id(student_app_id) -> FullStudent | None:
@@ -395,6 +407,8 @@ def randomly_switch_allocated_students_to_unassigned(count: int = 3) -> list[int
             ("Unassigned", *selected),
         )
         connection.commit()
+
+    clear_student_full_view_cache()
 
     for app_id in selected:
         try:
