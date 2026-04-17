@@ -1,0 +1,3 @@
+- Precompute and store a normalized free-text search blob per student (and potentially per-field normalized variants) during refresh/insertion to remove runtime normalization cost entirely.
+- Investigate a dedicated in-memory index for free-text terms (token -> candidate app_ids) to prefilter candidate students before fuzzy scoring.
+- Add an explicit cache invalidation hook in update/refresh routes that clears both `apply_filters` and repository-level student caches in one place to simplify cache correctness guarantees.

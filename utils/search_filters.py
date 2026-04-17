@@ -306,25 +306,14 @@ def _parse_free_text_query(search_query: str) -> list[tuple[str, ...]]:
     return clauses
 
 
-def _matches_free_text_term(search_query: str, prepared_fields: tuple[str, ...]) -> bool:
-    (
-        first_name,
-        photo_comments,
-        religion,
-        allergy_comments,
-        dietary_restrictions,
-        health_comments,
-        favorite_subjects,
-        selected_interests,
-        free_text_interests,
-        intro_message,
-        message_to_host_family,
-        message_from_natural_family,
-    ) = prepared_fields
-
+def _matches_free_text_term(
+    search_query: str,
+    ratio_candidates: tuple[str, str],
+    partial_candidates: tuple[str, ...],
+) -> bool:
     ratio_match = process.extractOne(
         search_query,
-        (first_name, religion),
+        ratio_candidates,
         scorer=fuzz.ratio,
         processor=None,
         score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
@@ -334,18 +323,7 @@ def _matches_free_text_term(search_query: str, prepared_fields: tuple[str, ...])
 
     partial_match = process.extractOne(
         search_query,
-        (
-            photo_comments,
-            allergy_comments,
-            dietary_restrictions,
-            health_comments,
-            favorite_subjects,
-            selected_interests,
-            free_text_interests,
-            intro_message,
-            message_to_host_family,
-            message_from_natural_family,
-        ),
+        partial_candidates,
         scorer=fuzz.partial_ratio,
         processor=None,
         score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
@@ -357,8 +335,24 @@ def _matches_free_text_clauses(
     clauses: list[tuple[str, ...]], student: FullStudent
 ) -> bool:
     prepared_fields = _prepare_free_text_fields(student)
+    ratio_candidates = (prepared_fields[0], prepared_fields[2])
+    partial_candidates = (
+        prepared_fields[1],
+        prepared_fields[3],
+        prepared_fields[4],
+        prepared_fields[5],
+        prepared_fields[6],
+        prepared_fields[7],
+        prepared_fields[8],
+        prepared_fields[9],
+        prepared_fields[10],
+        prepared_fields[11],
+    )
     return any(
-        all(_matches_free_text_term(term, prepared_fields) for term in and_terms)
+        all(
+            _matches_free_text_term(term, ratio_candidates, partial_candidates)
+            for term in and_terms
+        )
         for and_terms in clauses
     )
 
