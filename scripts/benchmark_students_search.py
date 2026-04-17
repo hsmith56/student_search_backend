@@ -79,10 +79,11 @@ def _build_workload() -> list[WorkloadCase]:
     ]
 
 
-def run_once(workload: list[WorkloadCase]) -> tuple[float, int]:
+def run_once(workload: list[WorkloadCase]) -> tuple[float, int, dict[str, float]]:
     params = ItemQueryParams()
     total_ms = 0.0
     total_results = 0
+    case_ms: dict[str, float] = {}
 
     for case in workload:
         apply_filters.cache_clear()
@@ -97,8 +98,9 @@ def run_once(workload: list[WorkloadCase]) -> tuple[float, int]:
         elapsed_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
         total_ms += elapsed_ms
         total_results += int(response["total_results"])
+        case_ms[case.name] = elapsed_ms
 
-    return total_ms, total_results
+    return total_ms, total_results, case_ms
 
 
 def main() -> None:
@@ -118,10 +120,18 @@ def main() -> None:
     p95_total_ms = statistics.quantiles(total_ms_samples, n=20)[18]
     median_results = int(statistics.median(total_results_samples))
 
+    case_names = [case.name for case in workload]
+    case_medians = {
+        case_name: statistics.median(sample[2][case_name] for sample in samples)
+        for case_name in case_names
+    }
+
     print(f"METRIC total_ms={median_total_ms:.3f}")
     print(f"METRIC p95_total_ms={p95_total_ms:.3f}")
     print(f"METRIC total_results={median_results}")
     print(f"METRIC student_count={_student_count()}")
+    for case_name in case_names:
+        print(f"METRIC {case_name}_ms={case_medians[case_name]:.3f}")
 
 
 if __name__ == "__main__":
