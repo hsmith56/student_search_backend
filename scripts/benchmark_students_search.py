@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import statistics
 import time
 from dataclasses import dataclass
@@ -23,45 +24,57 @@ def _sample_favorites(limit: int = 30) -> list[int]:
         return [int(row[0]) for row in cursor.fetchall()]
 
 
+def _student_count() -> int:
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM student_full_view")
+        return int(cursor.fetchone()[0])
+
+
 def _build_workload() -> list[WorkloadCase]:
     favorite_ids = _sample_favorites(30)
+    common_filter_kwargs = {
+        "urban_request": False,
+        "interests": ("all",),
+    }
 
     return [
         WorkloadCase(
             name="baseline_all",
-            filters=SearchFilters(),
+            filters=SearchFilters(**common_filter_kwargs),
             current_user={"favorites": "[]"},
         ),
         WorkloadCase(
             name="structured_filters",
             filters=SearchFilters(
+                **common_filter_kwargs,
                 gender_female=True,
                 gender_male=False,
-                state=("CA", "TX", "FL"),
-                statusOptions=("Allocated", "Unassigned"),
-                adjusted_age="16",
-                gpa="3.0",
+                statusOptions=("Allocated", "Placement Pending", "Placed"),
+                adjusted_age="15",
+                gpa="2.5",
                 hasVideo=True,
-                country_of_origin=("Brazil", "Japan", "Germany"),
-                interests=("music", "sports", "reading"),
+                country_of_origin=("Germany", "Spain", "Italy", "Brazil"),
             ),
             current_user={"favorites": "[]"},
         ),
         WorkloadCase(
             name="free_text",
             filters=SearchFilters(
-                free_text="soccer & allergy | catholic",
-                statusOptions=("Unassigned",),
+                **common_filter_kwargs,
+                free_text="Sofia|Emma|Lucas",
+                statusOptions=("Allocated", "Placement Pending", "Placed"),
             ),
             current_user={"favorites": "[]"},
         ),
         WorkloadCase(
             name="favorites",
             filters=SearchFilters(
+                **common_filter_kwargs,
                 only_favorites=True,
-                statusOptions=("Allocated", "Unassigned"),
+                statusOptions=("Allocated", "Placement Pending", "Placed", "Unassigned"),
             ),
-            current_user={"favorites": str(favorite_ids).replace("'", '"')},
+            current_user={"favorites": json.dumps(favorite_ids)},
         ),
     ]
 
@@ -108,6 +121,7 @@ def main() -> None:
     print(f"METRIC total_ms={median_total_ms:.3f}")
     print(f"METRIC p95_total_ms={p95_total_ms:.3f}")
     print(f"METRIC total_results={median_results}")
+    print(f"METRIC student_count={_student_count()}")
 
 
 if __name__ == "__main__":
