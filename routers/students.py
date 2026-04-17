@@ -91,18 +91,19 @@ def run_student_search(
         filters, favorite_student_ids
     )
 
-    results: list[FullStudent] = sorted(  # pyright: ignore[reportRedeclaration]
+    sorted_results: list[FullStudent] = sorted(
         results,
-        key=lambda x: x.__getattribute__(params.order_by),
+        key=lambda student: getattr(student, params.order_by),
         reverse=params.descending,
     )
 
-    results: list[BasicStudent] = [BasicStudent(**x.model_dump()) for x in results]
-
-    total: int = len(results)
+    total: int = len(sorted_results)
     start: int = (page - 1) * page_size
     end: int = start + page_size
-    paginated: list[BasicStudent] = results[start:end]
+    paginated_full: list[FullStudent] = sorted_results[start:end]
+    paginated: list[BasicStudent] = [
+        BasicStudent(**student.model_dump()) for student in paginated_full
+    ]
 
     return {
         "page": page,
