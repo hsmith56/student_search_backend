@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
@@ -237,20 +238,51 @@ def _normalize_free_text_value(value: str | None) -> str:
     return processed or ""
 
 
-def _prepare_free_text_fields(student: FullStudent) -> tuple[str, ...]:
+@lru_cache(maxsize=2048)
+def _prepare_free_text_fields_cached(
+    first_name: str,
+    photo_comments: str,
+    religion: str,
+    allergy_comments: str,
+    dietary_restrictions: str,
+    health_comments: tuple[str, ...],
+    favorite_subjects: str,
+    selected_interests: tuple[str, ...],
+    free_text_interests: tuple[str, ...],
+    intro_message: str,
+    message_to_host_family: str,
+    message_from_natural_family: str,
+) -> tuple[str, ...]:
     return (
-        _normalize_free_text_value(student.first_name),
-        _normalize_free_text_value(student.photo_comments),
-        _normalize_free_text_value(student.religion),
-        _normalize_free_text_value(student.allergy_comments),
-        _normalize_free_text_value(student.dietary_restrictions),
-        _normalize_free_text_value(" ".join(w for w in student.health_comments)),
-        _normalize_free_text_value(" ".join(w for w in student.favorite_subjects)),
-        _normalize_free_text_value(" ".join(w for w in student.selected_interests)),
-        _normalize_free_text_value(" ".join(w for w in student.free_text_interests)),
-        _normalize_free_text_value(student.intro_message),
-        _normalize_free_text_value(student.message_to_host_family),
-        _normalize_free_text_value(student.message_from_natural_family),
+        _normalize_free_text_value(first_name),
+        _normalize_free_text_value(photo_comments),
+        _normalize_free_text_value(religion),
+        _normalize_free_text_value(allergy_comments),
+        _normalize_free_text_value(dietary_restrictions),
+        _normalize_free_text_value(" ".join(w for w in health_comments)),
+        _normalize_free_text_value(" ".join(w for w in favorite_subjects)),
+        _normalize_free_text_value(" ".join(w for w in selected_interests)),
+        _normalize_free_text_value(" ".join(w for w in free_text_interests)),
+        _normalize_free_text_value(intro_message),
+        _normalize_free_text_value(message_to_host_family),
+        _normalize_free_text_value(message_from_natural_family),
+    )
+
+
+def _prepare_free_text_fields(student: FullStudent) -> tuple[str, ...]:
+    return _prepare_free_text_fields_cached(
+        student.first_name,
+        student.photo_comments,
+        student.religion,
+        student.allergy_comments,
+        student.dietary_restrictions,
+        tuple(student.health_comments),
+        student.favorite_subjects,
+        tuple(student.selected_interests),
+        tuple(student.free_text_interests),
+        student.intro_message,
+        student.message_to_host_family,
+        student.message_from_natural_family,
     )
 
 
