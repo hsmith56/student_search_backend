@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 
 from repositories.admin import get_last_update_datetime, update_time
-from repositories.students import get_all_full_students, get_favorites, get_full_student_by_id
+from repositories.students import get_all_full_students, get_full_student_by_id
 from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
 from enum import Enum
@@ -51,11 +51,13 @@ def get_full_student(app_id: int) -> FullStudent:
 def apply_filters(
     filters: SearchFilters, favorite_student_ids: tuple[int, ...] 
 ) -> list[FullStudent]:
-    students = (
-        get_favorites(list(favorite_student_ids))
-        if favorite_student_ids is not None
-        else get_all_full_students()
-    )
+    if favorite_student_ids is not None:
+        favorite_set = set(favorite_student_ids)
+        students = [
+            student for student in get_all_full_students() if student.app_id in favorite_set
+        ]
+    else:
+        students = get_all_full_students()
     return filter_students(students=students, filters=filters)
 
 
