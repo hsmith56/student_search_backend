@@ -4,7 +4,7 @@ from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
 from models.student import FullStudent
-from rapidfuzz import fuzz, utils
+from rapidfuzz import fuzz, process, utils
 
 logger = logging.getLogger(__name__)
 FilterStep = Callable[[list[FullStudent], SearchFilters], list[FullStudent]]
@@ -322,67 +322,35 @@ def _matches_free_text_term(search_query: str, prepared_fields: tuple[str, ...])
         message_from_natural_family,
     ) = prepared_fields
 
-    if (
-        fuzz.ratio(search_query, first_name, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
+    ratio_match = process.extractOne(
+        search_query,
+        (first_name, religion),
+        scorer=fuzz.ratio,
+        processor=None,
+        score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+    )
+    if ratio_match is not None:
         return True
-    if (
-        fuzz.partial_ratio(search_query, photo_comments, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.ratio(search_query, religion, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, allergy_comments, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, dietary_restrictions, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, health_comments, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, favorite_subjects, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, selected_interests, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, free_text_interests, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, intro_message, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, message_to_host_family, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(search_query, message_from_natural_family, processor=None)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    return False
+
+    partial_match = process.extractOne(
+        search_query,
+        (
+            photo_comments,
+            allergy_comments,
+            dietary_restrictions,
+            health_comments,
+            favorite_subjects,
+            selected_interests,
+            free_text_interests,
+            intro_message,
+            message_to_host_family,
+            message_from_natural_family,
+        ),
+        scorer=fuzz.partial_ratio,
+        processor=None,
+        score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+    )
+    return partial_match is not None
 
 
 def _matches_free_text_clauses(
