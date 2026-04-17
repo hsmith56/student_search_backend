@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
@@ -233,23 +232,33 @@ def _filter_photo_search(students: list[FullStudent], filters: SearchFilters) ->
     ]
 
 
+def _parse_free_text_query(search_query: str) -> list[tuple[str, ...]]:
+    normalized_query = search_query.strip()
+    if not normalized_query:
+        return []
+
+    clauses: list[tuple[str, ...]] = []
+    for and_clause in normalized_query.split("|"):
+        and_terms = tuple(term.strip() for term in and_clause.split("&") if term.strip())
+        if and_terms:
+            clauses.append(and_terms)
+    return clauses
+
+
+def _matches_free_text_clauses(
+    clauses: list[tuple[str, ...]], student: FullStudent
+) -> bool:
+    return any(
+        all(_matches_free_text_term(term, student) for term in and_terms)
+        for and_terms in clauses
+    )
+
+
 def _matches_free_text(search_query: str, student: FullStudent) -> bool:
-    search_query = search_query.strip()
-    if not search_query:
+    clauses = _parse_free_text_query(search_query)
+    if not clauses:
         return False
-
-    or_terms = [term.strip() for term in re.split(r"\|", search_query) if term.strip()]
-    if not or_terms:
-        return False
-
-    return any(_matches_free_text_and_clause(and_clause, student) for and_clause in or_terms)
-
-
-def _matches_free_text_and_clause(and_clause: str, student: FullStudent) -> bool:
-    and_terms = [term.strip() for term in re.split(r"&", and_clause) if term.strip()]
-    if not and_terms:
-        return False
-    return all(_matches_free_text_term(term, student) for term in and_terms)
+    return _matches_free_text_clauses(clauses, student)
 
 
 def _matches_free_text_term(search_query: str, student: FullStudent) -> bool:
@@ -352,7 +361,11 @@ def _filter_free_text(students: list[FullStudent], filters: SearchFilters) -> li
     if filters.free_text is None or filters.free_text == "":
         return students
 
-    return [student for student in students if _matches_free_text(filters.free_text, student)]
+    clauses = _parse_free_text_query(filters.free_text)
+    if not clauses:
+        return students
+
+    return [student for student in students if _matches_free_text_clauses(clauses, student)]
 
 
 FilterSpec = tuple[str, FilterStep]
