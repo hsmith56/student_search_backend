@@ -180,6 +180,7 @@ def get_updates_from_beacon(use_file_instead="") -> list:
         else:
             PAGE_SIZE = 100
             search_payload = {
+                "appStatuses": [],
                 "statuses": [
                     1,  # Allocated
                     3,  # On hold
