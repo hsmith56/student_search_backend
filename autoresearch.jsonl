@@ -1,0 +1,1 @@
+{"type":"config","name":"Optimize students search endpoint latency (resume)","metricName":"total_ms","metricUnit":"ms","bestDirection":"lower"}

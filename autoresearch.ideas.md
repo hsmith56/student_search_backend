@@ -1,0 +1,3 @@
+- Precompute normalized free-text blobs during refresh and store alongside student objects.
+- Add token prefiltering/inverted index to shrink free-text fuzzy candidate set.
+- Centralize cache invalidation for repository and filter caches.
