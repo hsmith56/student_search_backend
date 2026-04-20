@@ -260,7 +260,7 @@ def _prepare_free_text_fields_cached(
         _normalize_free_text_value(allergy_comments),
         _normalize_free_text_value(dietary_restrictions),
         _normalize_free_text_value(" ".join(w for w in health_comments)),
-        _normalize_free_text_value(" ".join(w for w in favorite_subjects)),
+        _normalize_free_text_value(favorite_subjects),
         _normalize_free_text_value(" ".join(w for w in selected_interests)),
         _normalize_free_text_value(" ".join(w for w in free_text_interests)),
         _normalize_free_text_value(intro_message),
