@@ -348,13 +348,17 @@ def _matches_free_text_clauses(
         prepared_fields[10],
         prepared_fields[11],
     )
-    return any(
-        all(
-            _matches_free_text_term(term, ratio_candidates, partial_candidates)
-            for term in and_terms
-        )
-        for and_terms in clauses
-    )
+
+    for and_terms in clauses:
+        clause_matches = True
+        for term in and_terms:
+            if not _matches_free_text_term(term, ratio_candidates, partial_candidates):
+                clause_matches = False
+                break
+        if clause_matches:
+            return True
+
+    return False
 
 
 def _matches_free_text(search_query: str, student: FullStudent) -> bool:
