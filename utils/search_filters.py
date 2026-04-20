@@ -348,13 +348,32 @@ def _matches_free_text_clauses(
         prepared_fields[10],
         prepared_fields[11],
     )
+    extract_one = process.extractOne
 
     for and_terms in clauses:
         clause_matches = True
         for term in and_terms:
-            if not _matches_free_text_term(term, ratio_candidates, partial_candidates):
+            ratio_match = extract_one(
+                term,
+                ratio_candidates,
+                scorer=fuzz.ratio,
+                processor=None,
+                score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+            )
+            if ratio_match is not None:
+                continue
+
+            partial_match = extract_one(
+                term,
+                partial_candidates,
+                scorer=fuzz.partial_ratio,
+                processor=None,
+                score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+            )
+            if partial_match is None:
                 clause_matches = False
                 break
+
         if clause_matches:
             return True
 
