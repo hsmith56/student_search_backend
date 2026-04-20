@@ -15,11 +15,20 @@ fi
 export UV_PROJECT_ENVIRONMENT="/tmp/pi-autoresearch-venv"
 export UV_LINK_MODE="copy"
 
-PYTHONPATH=. "$UV_BIN" run python -m py_compile \
-  routers/students.py \
-  utils/search_filters.py \
-  repositories/students.py \
-  models/search_filters.py \
-  scripts/benchmark_students_search.py >/dev/null
+RUN_UV="$UV_BIN"
+if ! "$RUN_UV" --version >/dev/null 2>&1; then
+  RUN_UV="$(command -v uv || true)"
+fi
+if [ -z "$RUN_UV" ]; then
+  echo "uv executable not available" >&2
+  exit 127
+fi
 
-PYTHONPATH=. "$UV_BIN" run python -m scripts.benchmark_students_search
+PYTHONPATH=. "$RUN_UV" run python -m py_compile \
+  repositories/base.py \
+  repositories/admin.py \
+  repositories/users.py \
+  repositories/students.py \
+  scripts/benchmark_db_layer.py >/dev/null
+
+PYTHONPATH=. "$RUN_UV" run python -m scripts.benchmark_db_layer

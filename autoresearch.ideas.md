@@ -1,3 +1,4 @@
-- Precompute normalized free-text blobs during refresh and store alongside student objects.
-- Add token prefiltering/inverted index to shrink free-text fuzzy candidate set.
-- Centralize cache invalidation for repository and filter caches.
+- Add/validate targeted indexes for measured hot read paths in `users` and any student lookup queries used in benchmark (only when query plans show benefit).
+- Refactor repeated `connection/cursor/fetch/close` patterns in repositories into small helpers to reduce duplication while preserving behavior.
+- Consolidate migration/column-add logic in `initialize_db()` with reusable helpers to reduce duplicated schema-evolution code.
+- Add a second benchmark profile (different query mix) once first optimizations land to verify generalization and avoid overfitting.
