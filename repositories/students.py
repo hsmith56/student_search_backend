@@ -154,10 +154,18 @@ def to_json(value):
     return json.dumps(list(value) if isinstance(value, set) else value)
 
 
+@lru_cache(maxsize=16384)
+def _from_json_list_cached(value: str) -> tuple[Any, ...]:
+    parsed = json.loads(value)
+    if isinstance(parsed, list):
+        return tuple(parsed)
+    return tuple()
+
+
 def from_json(value, default):
     if value is None:
         return default
-    return json.loads(value)
+    return _from_json_list_cached(value)
 
 
 def bool_to_int(value: bool | None) -> int | None:
@@ -290,17 +298,17 @@ def row_to_student(row) -> FullStudent:
         usahsid=data["usahsid"],
         program_type=data["program_type"],
         adjusted_age=data["adjusted_age"],
-        selected_interests=from_json(data["selected_interests"], []),
+        selected_interests=from_json(data["selected_interests"], ()),
         urban_request=data["urban_request"],
         placement_status=data["placement_status"],
         gender_desc=data["gender_desc"],
         current_grade=data["current_grade"],
         status=data["status"],
-        states=set(from_json(data["states"], [])),
+        states=set(from_json(data["states"], ())),
         early_placement=int_to_bool(data["early_placement"]),
         single_placement=int_to_bool(data["single_placement"]),  # ty:ignore[invalid-argument-type]
         double_placement=int_to_bool(data["double_placement"]),  # ty:ignore[invalid-argument-type]
-        free_text_interests=from_json(data["free_text_interests"], []),
+        free_text_interests=from_json(data["free_text_interests"], ()),
         family_description=data["family_description"],
         favorite_subjects=data["favorite_subjects"],
         photo_comments=data["photo_comments"],
@@ -312,7 +320,7 @@ def row_to_student(row) -> FullStudent:
         message_to_host_family=data["message_to_host_family"],
         message_from_natural_family=data["message_from_natural_family"],
         media_link=data["media_link"],
-        health_comments=from_json(data["health_comments"], []),
+        health_comments=from_json(data["health_comments"], ()),
         live_with_pets=int_to_bool(data["live_with_pets"]),
         local_coordinator=data["local_coordinator"],
         tuition_placement=data["tuition_placement"],
