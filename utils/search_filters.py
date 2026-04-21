@@ -1,10 +1,10 @@
 import logging
-import re
+from functools import lru_cache
 from typing import Callable, Optional, Sequence, Final
 
 from models.search_filters import SearchFilters
 from models.student import FullStudent
-from rapidfuzz import fuzz, utils
+from rapidfuzz import fuzz, process, utils
 
 logger = logging.getLogger(__name__)
 FilterStep = Callable[[list[FullStudent], SearchFilters], list[FullStudent]]
@@ -233,126 +233,169 @@ def _filter_photo_search(students: list[FullStudent], filters: SearchFilters) ->
     ]
 
 
-def _matches_free_text(search_query: str, student: FullStudent) -> bool:
-    search_query = search_query.strip()
-    if not search_query:
-        return False
-
-    or_terms = [term.strip() for term in re.split(r"\|", search_query) if term.strip()]
-    if not or_terms:
-        return False
-
-    return any(_matches_free_text_and_clause(and_clause, student) for and_clause in or_terms)
+def _normalize_free_text_value(value: str | None) -> str:
+    processed = utils.default_process(value if value is not None else "")
+    return processed or ""
 
 
-def _matches_free_text_and_clause(and_clause: str, student: FullStudent) -> bool:
-    and_terms = [term.strip() for term in re.split(r"&", and_clause) if term.strip()]
-    if not and_terms:
-        return False
-    return all(_matches_free_text_term(term, student) for term in and_terms)
+@lru_cache(maxsize=2048)
+def _prepare_free_text_fields_cached(
+    first_name: str,
+    photo_comments: str,
+    religion: str,
+    allergy_comments: str,
+    dietary_restrictions: str,
+    health_comments: tuple[str, ...],
+    favorite_subjects: str,
+    selected_interests: tuple[str, ...],
+    free_text_interests: tuple[str, ...],
+    intro_message: str,
+    message_to_host_family: str,
+    message_from_natural_family: str,
+) -> tuple[str, ...]:
+    return (
+        _normalize_free_text_value(first_name),
+        _normalize_free_text_value(photo_comments),
+        _normalize_free_text_value(religion),
+        _normalize_free_text_value(allergy_comments),
+        _normalize_free_text_value(dietary_restrictions),
+        _normalize_free_text_value(" ".join(w for w in health_comments)),
+        _normalize_free_text_value(favorite_subjects),
+        _normalize_free_text_value(" ".join(w for w in selected_interests)),
+        _normalize_free_text_value(" ".join(w for w in free_text_interests)),
+        _normalize_free_text_value(intro_message),
+        _normalize_free_text_value(message_to_host_family),
+        _normalize_free_text_value(message_from_natural_family),
+    )
 
 
-def _matches_free_text_term(search_query: str, student: FullStudent) -> bool:
-    if (
-        fuzz.ratio(search_query, student.first_name, processor=utils.default_process)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query, student.photo_comments, processor=utils.default_process
+def _prepare_free_text_fields(student: FullStudent) -> tuple[str, ...]:
+    return _prepare_free_text_fields_cached(
+        student.first_name,
+        student.photo_comments,
+        student.religion,
+        student.allergy_comments,
+        student.dietary_restrictions,
+        tuple(student.health_comments),
+        student.favorite_subjects,
+        tuple(student.selected_interests),
+        tuple(student.free_text_interests),
+        student.intro_message,
+        student.message_to_host_family,
+        student.message_from_natural_family,
+    )
+
+
+def _parse_free_text_query(search_query: str) -> list[tuple[str, ...]]:
+    normalized_query = search_query.strip()
+    if not normalized_query:
+        return []
+
+    clauses: list[tuple[str, ...]] = []
+    for and_clause in normalized_query.split("|"):
+        normalized_terms = tuple(
+            normalized
+            for normalized in (
+                _normalize_free_text_value(term.strip())
+                for term in and_clause.split("&")
+            )
+            if normalized
         )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
+        if normalized_terms:
+            clauses.append(normalized_terms)
+    return clauses
+
+
+def _matches_free_text_term(
+    search_query: str,
+    ratio_candidates: tuple[str, str],
+    partial_candidates: tuple[str, ...],
+) -> bool:
+    ratio_match = process.extractOne(
+        search_query,
+        ratio_candidates,
+        scorer=fuzz.ratio,
+        processor=None,
+        score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+    )
+    if ratio_match is not None:
         return True
-    if (
-        fuzz.ratio(search_query, student.religion, processor=utils.default_process)
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query, student.allergy_comments, processor=utils.default_process
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            student.dietary_restrictions,
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query, " ".join(w for w in student.health_comments), processor=utils.default_process
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            " ".join(w for w in student.favorite_subjects),
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            " ".join(w for w in student.selected_interests),
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            " ".join(w for w in student.free_text_interests),
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query, student.intro_message, processor=utils.default_process
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            student.message_to_host_family,
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
-    if (
-        fuzz.partial_ratio(
-            search_query,
-            student.message_from_natural_family,
-            processor=utils.default_process,
-        )
-        >= FREE_TEXT_RATIO_THRESHOLD
-    ):
-        return True
+
+    partial_match = process.extractOne(
+        search_query,
+        partial_candidates,
+        scorer=fuzz.partial_ratio,
+        processor=None,
+        score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+    )
+    return partial_match is not None
+
+
+def _matches_free_text_clauses(
+    clauses: list[tuple[str, ...]], student: FullStudent
+) -> bool:
+    prepared_fields = _prepare_free_text_fields(student)
+    ratio_candidates = (prepared_fields[0], prepared_fields[2])
+    partial_candidates = (
+        prepared_fields[1],
+        prepared_fields[3],
+        prepared_fields[4],
+        prepared_fields[5],
+        prepared_fields[6],
+        prepared_fields[7],
+        prepared_fields[8],
+        prepared_fields[9],
+        prepared_fields[10],
+        prepared_fields[11],
+    )
+    extract_one = process.extractOne
+
+    for and_terms in clauses:
+        clause_matches = True
+        for term in and_terms:
+            ratio_match = extract_one(
+                term,
+                ratio_candidates,
+                scorer=fuzz.ratio,
+                processor=None,
+                score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+            )
+            if ratio_match is not None:
+                continue
+
+            partial_match = extract_one(
+                term,
+                partial_candidates,
+                scorer=fuzz.partial_ratio,
+                processor=None,
+                score_cutoff=FREE_TEXT_RATIO_THRESHOLD,
+            )
+            if partial_match is None:
+                clause_matches = False
+                break
+
+        if clause_matches:
+            return True
+
     return False
+
+
+def _matches_free_text(search_query: str, student: FullStudent) -> bool:
+    clauses = _parse_free_text_query(search_query)
+    if not clauses:
+        return False
+    return _matches_free_text_clauses(clauses, student)
 
 
 def _filter_free_text(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
     if filters.free_text is None or filters.free_text == "":
         return students
 
-    return [student for student in students if _matches_free_text(filters.free_text, student)]
+    clauses = _parse_free_text_query(filters.free_text)
+    if not clauses:
+        return students
+
+    return [student for student in students if _matches_free_text_clauses(clauses, student)]
 
 
 FilterSpec = tuple[str, FilterStep]

@@ -13,7 +13,7 @@ class BasicStudent(BaseModel):
     usahsid: str
     program_type: str
     adjusted_age: int
-    selected_interests: list[str]  # use for embeddings
+    selected_interests: tuple[str, ...]  # use for embeddings
     urban_request: str
     placement_status: str
     gender_desc: str  # use for embeddings
@@ -28,7 +28,7 @@ class FullStudent(BasicStudent):
     tuition_placement: bool
     single_placement: bool
     double_placement: bool
-    free_text_interests: list[str]
+    free_text_interests: tuple[str, ...]
     family_description: str  # use for embeddings
     favorite_subjects: str  # use for embeddings
     photo_comments: str  # use for embeddings
@@ -40,6 +40,6 @@ class FullStudent(BasicStudent):
     message_to_host_family: str  # use for embeddings
     message_from_natural_family: str  # use for embeddings
     media_link: str
-    health_comments: list[str]  # use for embeddings
+    health_comments: tuple[str, ...]  # use for embeddings
     live_with_pets: Optional[bool]
     local_coordinator: Optional[str] = ""

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 
 from repositories.admin import get_last_update_datetime, update_time
-from repositories.students import get_all_full_students, get_favorites, get_full_student_by_id
+from repositories.students import get_all_full_students, get_full_student_by_id
 from utils.beacon_refresh_stage2 import run_stage_2_multi_threaded
 from utils.beacon_refresh_stage1 import get_updates_from_beacon
 from enum import Enum
@@ -51,11 +51,13 @@ def get_full_student(app_id: int) -> FullStudent:
 def apply_filters(
     filters: SearchFilters, favorite_student_ids: tuple[int, ...] 
 ) -> list[FullStudent]:
-    students = (
-        get_favorites(list(favorite_student_ids))
-        if favorite_student_ids is not None
-        else get_all_full_students()
-    )
+    if favorite_student_ids is not None:
+        favorite_set = set(favorite_student_ids)
+        students = [
+            student for student in get_all_full_students() if student.app_id in favorite_set
+        ]
+    else:
+        students = get_all_full_students()
     return filter_students(students=students, filters=filters)
 
 
@@ -91,18 +93,19 @@ def run_student_search(
         filters, favorite_student_ids
     )
 
-    results: list[FullStudent] = sorted(  # pyright: ignore[reportRedeclaration]
+    sorted_results: list[FullStudent] = sorted(
         results,
-        key=lambda x: x.__getattribute__(params.order_by),
+        key=lambda student: getattr(student, params.order_by),
         reverse=params.descending,
     )
 
-    results: list[BasicStudent] = [BasicStudent(**x.model_dump()) for x in results]
-
-    total: int = len(results)
+    total: int = len(sorted_results)
     start: int = (page - 1) * page_size
     end: int = start + page_size
-    paginated: list[BasicStudent] = results[start:end]
+    paginated_full: list[FullStudent] = sorted_results[start:end]
+    paginated: list[BasicStudent] = [
+        BasicStudent(**student.model_dump()) for student in paginated_full
+    ]
 
     return {
         "page": page,

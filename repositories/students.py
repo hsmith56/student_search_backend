@@ -2,6 +2,7 @@ import itertools
 import json
 import logging
 import sqlite3
+from functools import lru_cache
 from typing import Any
 
 from models.student import FullStudent
@@ -79,6 +80,7 @@ def update_student_status_full(
                     (placement_status, app_id),
                 )
             connection.commit()
+            clear_student_full_view_cache()
 
     except Exception as e:
         logger.warning(f"Student - {app_id}: {e}")
@@ -152,10 +154,18 @@ def to_json(value):
     return json.dumps(list(value) if isinstance(value, set) else value)
 
 
+@lru_cache(maxsize=16384)
+def _from_json_list_cached(value: str) -> tuple[Any, ...]:
+    parsed = json.loads(value)
+    if isinstance(parsed, list):
+        return tuple(parsed)
+    return tuple()
+
+
 def from_json(value, default):
     if value is None:
         return default
-    return json.loads(value)
+    return _from_json_list_cached(value)
 
 
 def bool_to_int(value: bool | None) -> int | None:
@@ -271,6 +281,7 @@ def insert_full_student(student):
 
     connection.commit()
     connection.close()
+    clear_student_full_view_cache()
 
 
 def row_to_student(row) -> FullStudent:
@@ -287,17 +298,17 @@ def row_to_student(row) -> FullStudent:
         usahsid=data["usahsid"],
         program_type=data["program_type"],
         adjusted_age=data["adjusted_age"],
-        selected_interests=from_json(data["selected_interests"], []),
+        selected_interests=from_json(data["selected_interests"], ()),
         urban_request=data["urban_request"],
         placement_status=data["placement_status"],
         gender_desc=data["gender_desc"],
         current_grade=data["current_grade"],
         status=data["status"],
-        states=set(from_json(data["states"], [])),
+        states=set(from_json(data["states"], ())),
         early_placement=int_to_bool(data["early_placement"]),
         single_placement=int_to_bool(data["single_placement"]),  # ty:ignore[invalid-argument-type]
         double_placement=int_to_bool(data["double_placement"]),  # ty:ignore[invalid-argument-type]
-        free_text_interests=from_json(data["free_text_interests"], []),
+        free_text_interests=from_json(data["free_text_interests"], ()),
         family_description=data["family_description"],
         favorite_subjects=data["favorite_subjects"],
         photo_comments=data["photo_comments"],
@@ -309,21 +320,30 @@ def row_to_student(row) -> FullStudent:
         message_to_host_family=data["message_to_host_family"],
         message_from_natural_family=data["message_from_natural_family"],
         media_link=data["media_link"],
-        health_comments=from_json(data["health_comments"], []),
+        health_comments=from_json(data["health_comments"], ()),
         live_with_pets=int_to_bool(data["live_with_pets"]),
         local_coordinator=data["local_coordinator"],
         tuition_placement=data["tuition_placement"],
     )
 
 
-def get_all_full_students() -> list[FullStudent]:
+def clear_student_full_view_cache() -> None:
+    _get_all_full_students_cached.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def _get_all_full_students_cached() -> tuple[FullStudent, ...]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
 
     cursor.execute("SELECT * FROM student_full_view")
-    list_of_all_students = [row_to_student(row) for row in cursor.fetchall()]
+    list_of_all_students = tuple(row_to_student(row) for row in cursor.fetchall())
     connection.close()
     return list_of_all_students
+
+
+def get_all_full_students() -> list[FullStudent]:
+    return list(_get_all_full_students_cached())
 
 
 def get_full_student_by_id(student_app_id) -> FullStudent | None:
@@ -395,6 +415,8 @@ def randomly_switch_allocated_students_to_unassigned(count: int = 3) -> list[int
             ("Unassigned", *selected),
         )
         connection.commit()
+
+    clear_student_full_view_cache()
 
     for app_id in selected:
         try:
