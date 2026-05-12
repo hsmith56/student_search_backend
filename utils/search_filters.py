@@ -208,14 +208,17 @@ def _filter_religious_practice(students: list[FullStudent], filters: SearchFilte
 
 
 def _filter_grants_options(students: list[FullStudent], filters: SearchFilters) -> list[FullStudent]:
-    if filters.grants_options is None or len(filters.grants_options) == 0:
+    grants_options = _normalized_tuple_values(filters.grants_options)
+    if not grants_options:
         return students
 
-    if "grant" in filters.grants_options:
-        grant_prefixes = {"CBE", "CBX", "FAO", "FLX", "YES", "CBG"}
+    grant_prefixes = {"CBE", "CBX", "FAO", "FLX", "YES", "CBG"}
+    if "grant" in grants_options:
         return [student for student in students if student.usahsid.upper()[0:3] in grant_prefixes]
+    if "non-grants" in grants_options:
+        return [student for student in students if student.usahsid.upper()[0:3] not in grant_prefixes]
 
-    grants_set = set(filters.grants_options)
+    grants_set = set(grants_options)
     return [student for student in students if student.usahsid.lower()[0:3] in grants_set]
 
 
