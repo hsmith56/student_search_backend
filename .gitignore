@@ -25,3 +25,6 @@ embeddings.py
 *.crt
 *.key
 placement_data.json
+
+# Local scan outputs
+scan_findings.md
