@@ -151,8 +151,8 @@ def get_current_user(
     return user
 
 
-def _require_rpm_or_admin(current_user: dict) -> None:
-    if current_user["account_type"] not in {"admin", "rpm"}:
+def _require_director_rpm_or_admin(current_user: dict) -> None:
+    if current_user["account_type"] not in {"admin", "director", "rpm"}:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
@@ -259,7 +259,7 @@ def change_password(
 def reset_password(
     payload: ResetUserPasswordRequest, current_user: dict = Depends(dependency=get_current_user)
 ):
-    _require_rpm_or_admin(current_user=current_user)
+    _require_director_rpm_or_admin(current_user=current_user)
 
     target_user = read_user(user_id=payload.user_id)
     if target_user is None:

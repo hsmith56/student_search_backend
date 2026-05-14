@@ -17,7 +17,7 @@ def initialize_db() -> None:
         hashed_password TEXT NOT NULL,
         first_name TEXT NOT NULL,
         favorites TEXT,
-        account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc')),
+        account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'director', 'rpm', 'lc')),
         "placing_states" TEXT,
         email TEXT,
         last_name TEXT,
@@ -40,7 +40,7 @@ def initialize_db() -> None:
         notes TEXT,
         auth_code TEXT,
         auth_code_hash TEXT NOT NULL UNIQUE,
-        account_type TEXT NOT NULL CHECK (account_type IN ('lc', 'rpm')),
+        account_type TEXT NOT NULL CHECK (account_type IN ('lc', 'director', 'rpm')),
         code_used INTEGER NOT NULL DEFAULT 0 CHECK (code_used IN (0,1)),
         submitter_id TEXT NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -240,7 +240,7 @@ def initialize_db() -> None:
         cursor.execute(
             """
         ALTER TABLE users
-        ADD COLUMN account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'rpm', 'lc'))
+        ADD COLUMN account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'director', 'rpm', 'lc'))
         """
         )
     if "placing_states" not in user_columns:
@@ -298,7 +298,7 @@ def initialize_db() -> None:
     UPDATE users
     SET account_type = 'lc'
     WHERE account_type IS NULL
-      OR account_type NOT IN ('admin', 'rpm', 'lc')
+      OR account_type NOT IN ('admin', 'director', 'rpm', 'lc')
     """
     )
     cursor.execute(
@@ -317,6 +317,49 @@ def initialize_db() -> None:
       AND submitter_id IS NOT NULL
     """
     )
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+    users_schema_row = cursor.fetchone()
+    users_schema = users_schema_row[0] if users_schema_row is not None else ""
+    if (
+        "account_type IN ('admin', 'rpm', 'lc')" in users_schema
+        and "director" not in users_schema
+    ):
+        cursor.execute("ALTER TABLE users RENAME TO users_old_account_type_check")
+        cursor.execute(
+            """
+        CREATE TABLE users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            hashed_password TEXT NOT NULL,
+            first_name TEXT NOT NULL,
+            favorites TEXT,
+            account_type TEXT NOT NULL DEFAULT 'lc' CHECK (account_type IN ('admin', 'director', 'rpm', 'lc')),
+            "placing_states" TEXT,
+            email TEXT,
+            last_name TEXT,
+            manager_id TEXT,
+            signup_code TEXT,
+            is_registered INTEGER NOT NULL DEFAULT 1 CHECK (is_registered IN (0,1)),
+            submitter_id TEXT
+        )
+        """
+        )
+        cursor.execute(
+            """
+        INSERT INTO users (
+            id, username, hashed_password, first_name, favorites, account_type,
+            "placing_states", email, last_name, manager_id, signup_code,
+            is_registered, submitter_id
+        )
+        SELECT
+            id, username, hashed_password, first_name, favorites, account_type,
+            "placing_states", email, last_name, manager_id, signup_code,
+            is_registered, submitter_id
+        FROM users_old_account_type_check
+        """
+        )
+        cursor.execute("DROP TABLE users_old_account_type_check")
+
     cursor.execute(
         """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_signup_code_unique
@@ -345,6 +388,61 @@ def initialize_db() -> None:
             """
         ALTER TABLE user_signup
         ADD COLUMN auth_code TEXT
+        """
+        )
+
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_signup'")
+    signup_schema_row = cursor.fetchone()
+    signup_schema = signup_schema_row[0] if signup_schema_row is not None else ""
+    if (
+        "account_type IN ('lc', 'rpm')" in signup_schema
+        and "director" not in signup_schema
+    ):
+        cursor.execute("ALTER TABLE user_signup RENAME TO user_signup_old_account_type_check")
+        cursor.execute(
+            """
+        CREATE TABLE user_signup (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            email TEXT,
+            states TEXT NOT NULL,
+            notes TEXT,
+            auth_code TEXT,
+            auth_code_hash TEXT NOT NULL UNIQUE,
+            account_type TEXT NOT NULL CHECK (account_type IN ('lc', 'director', 'rpm')),
+            code_used INTEGER NOT NULL DEFAULT 0 CHECK (code_used IN (0,1)),
+            submitter_id TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            used_at TIMESTAMP
+        )
+        """
+        )
+        cursor.execute(
+            """
+        INSERT INTO user_signup (
+            id, first_name, last_name, email, states, notes, auth_code,
+            auth_code_hash, account_type, code_used, submitter_id, created_at,
+            used_at
+        )
+        SELECT
+            id, first_name, last_name, email, states, notes, auth_code,
+            auth_code_hash, account_type, code_used, submitter_id, created_at,
+            used_at
+        FROM user_signup_old_account_type_check
+        """
+        )
+        cursor.execute("DROP TABLE user_signup_old_account_type_check")
+        cursor.execute(
+            """
+        CREATE INDEX IF NOT EXISTS idx_user_signup_submitter
+        ON user_signup(submitter_id);
+        """
+        )
+        cursor.execute(
+            """
+        CREATE INDEX IF NOT EXISTS idx_user_signup_code_used
+        ON user_signup(code_used, created_at DESC);
         """
         )
 
