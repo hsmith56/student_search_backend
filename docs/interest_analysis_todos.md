@@ -1,122 +1,52 @@
-# Interest Analysis Dashboard Endpoint TODOs
+# Interest Analysis Dashboard Endpoint
 
-## Context
+## Status
 
-A new `director` account type has been added. Directors should behave like RPM users, with the additional ability to access the upcoming dashboard utility endpoint. Admin users should also be allowed to access the endpoint.
+Implemented.
 
-## Remaining TODOs
+## Behavior
 
-### 1. Define “available students to place”
+- Endpoint: `GET /dashboard/interests`
+- Access: `admin` + `director`
+- Rejected roles: `rpm` + `lc`
+- Student filter: `placement_status = "Allocated"`
+- Interest source: `student_full_view.selected_interests`
+- Counts: case-insensitive, each interest counted once per student
+- Response labels: title case
+- Response shape: JSON object, `dict[str, int]`
 
-Confirm the exact `placement_status` values that should count as available.
-
-Suggested starting point:
-- Include statuses like `Unassigned` / equivalent available statuses.
-- Exclude placed, allocated, withdrawn, inactive, or unavailable statuses.
-
-Implementation note:
-- Inspect current distinct values from `student_full_view.placement_status` before coding the final filter.
-
-### 2. Add interest-count repository function
-
-File: `repositories/students.py`
-
-Add a function such as:
-
-```python
-def get_available_student_interest_counts() -> dict[str, int]:
-    ...
-```
-
-Expected behavior:
-- Query `student_full_view` for available students only.
-- Read `selected_interests` JSON.
-- Ignore null/empty/malformed interest payloads safely.
-- Normalize interest labels consistently, likely `strip()` and lower-case.
-- Count each interest once per student unless product wants duplicate entries counted.
-- Return a plain object like:
+Example:
 
 ```json
 {
-  "basketball": 16,
-  "fencing": 4
+  "Basketball - Playing": 30,
+  "Fencing": 4
 }
 ```
 
-### 3. Add dashboard router
+## Files
 
-New file: `routers/dashboard.py`
+- `repositories/students.py`
+  - `get_available_student_interest_counts()`
+- `routers/dashboard.py`
+  - `GET /dashboard/interests`
+  - `_require_director_or_admin()`
+- `main.py`
+  - dashboard router registration
 
-Suggested endpoint:
+## Validation
 
-```python
-@router.get("/interests", response_model=dict[str, int])
-def get_interest_analysis(current_user: dict = Depends(get_current_user)) -> dict[str, int]:
-    ...
-```
-
-Suggested router config:
-
-```python
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-```
-
-### 4. Add dashboard role guard
-
-Only allow:
-- `admin`
-- `director`
-
-Reject:
-- `rpm`
-- `lc`
-
-Suggested helper:
-
-```python
-def _require_director_or_admin(current_user: dict) -> None:
-    if current_user["account_type"] not in {"admin", "director"}:
-        raise HTTPException(status_code=403, detail="Forbidden")
-```
-
-### 5. Wire router into app
-
-File: `main.py`
-
-- Import `dashboard` from `routers`.
-- Include router with existing auth dependency pattern:
-
-```python
-app.include_router(dashboard.router, dependencies=[Depends(get_current_user)])
-```
-
-### 6. Validate behavior
-
-Recommended checks:
-- Compile changed files:
+Completed:
 
 ```bash
-uv run python -m py_compile repositories/students.py routers/dashboard.py main.py
+uv run ruff check repositories/students.py routers/dashboard.py main.py routers/admin.py routers/auth.py routers/rpm.py repositories/admin.py repositories/users.py
+uv run python -m py_compile repositories/students.py routers/dashboard.py main.py routers/admin.py routers/auth.py routers/rpm.py repositories/admin.py repositories/users.py
+uv run python -c "import main; print('main import ok')"
 ```
 
-- Import app:
+## Optional future work
 
-```bash
-uv run python -c "import main"
-```
-
-- Verify authorization behavior:
-  - `admin` -> `200`
-  - `director` -> `200`
-  - `rpm` -> `403`
-  - `lc` -> `403`
-
-- Verify response shape is a JSON object with string keys and integer counts.
-
-### 7. Optional tests
-
-If adding tests, cover:
-- Counts interests for available students.
-- Excludes unavailable/placed statuses.
-- Handles `selected_interests` of `NULL`, `[]`, malformed JSON.
-- Does not allow RPM/LC access.
+- Add automated tests for repo fn + dashboard guard.
+- Exercise live HTTP endpoint with real cookies for all roles.
+- Rename legacy `/rpm/*` routes only if frontend can absorb a breaking API change.
+- Rename `manager_id` fields only with coordinated DB/API/frontend migration.

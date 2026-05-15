@@ -244,7 +244,8 @@ class ResetUserPasswordRequest(BaseModel):
 
 @router.post(path="/change_password")
 def change_password(
-    payload: ChangePasswordRequest, current_user: dict = Depends(dependency=get_current_user)
+    payload: ChangePasswordRequest,
+    current_user: dict = Depends(dependency=get_current_user),
 ):
     updated = update_user_password_by_id(
         user_id=current_user["id"],
@@ -257,7 +258,8 @@ def change_password(
 
 @router.post(path="/reset_password")
 def reset_password(
-    payload: ResetUserPasswordRequest, current_user: dict = Depends(dependency=get_current_user)
+    payload: ResetUserPasswordRequest,
+    current_user: dict = Depends(dependency=get_current_user),
 ):
     _require_director_rpm_or_admin(current_user=current_user)
 

@@ -365,9 +365,7 @@ def admin_patch(
     )
     if update_account_type:
         if payload.account_type is None:
-            raise HTTPException(
-                status_code=400, detail="account_type cannot be null"
-            )
+            raise HTTPException(status_code=400, detail="account_type cannot be null")
         try:
             account_type_updated = update_user_account_type_by_id(
                 user_id=user_id,

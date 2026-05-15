@@ -18,6 +18,7 @@ from repositories.admin import initialize_db
 from routers import (
     admin,
     auth,
+    dashboard,
     feedback,
     guest_search,
     misc,
@@ -70,7 +71,9 @@ async def analytics_tracking_middleware(request: Request, call_next):
     capture_tracked_route_event(request=request, response=response)
     return response
 
+
 app.include_router(auth.router)
+app.include_router(dashboard.router, dependencies=[Depends(get_current_user)])
 app.include_router(guest_search.router)
 app.include_router(misc.router)
 app.include_router(admin.router, dependencies=[Depends(get_current_user)])

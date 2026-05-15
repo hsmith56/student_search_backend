@@ -317,13 +317,12 @@ def initialize_db() -> None:
       AND submitter_id IS NOT NULL
     """
     )
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'")
+    cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+    )
     users_schema_row = cursor.fetchone()
     users_schema = users_schema_row[0] if users_schema_row is not None else ""
-    if (
-        "account_type IN ('admin', 'rpm', 'lc')" in users_schema
-        and "director" not in users_schema
-    ):
+    if "account_type" in users_schema.lower() and "director" not in users_schema.lower():
         cursor.execute("ALTER TABLE users RENAME TO users_old_account_type_check")
         cursor.execute(
             """
@@ -391,14 +390,15 @@ def initialize_db() -> None:
         """
         )
 
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_signup'")
+    cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'user_signup'"
+    )
     signup_schema_row = cursor.fetchone()
     signup_schema = signup_schema_row[0] if signup_schema_row is not None else ""
-    if (
-        "account_type IN ('lc', 'rpm')" in signup_schema
-        and "director" not in signup_schema
-    ):
-        cursor.execute("ALTER TABLE user_signup RENAME TO user_signup_old_account_type_check")
+    if "account_type" in signup_schema.lower() and "director" not in signup_schema.lower():
+        cursor.execute(
+            "ALTER TABLE user_signup RENAME TO user_signup_old_account_type_check"
+        )
         cursor.execute(
             """
         CREATE TABLE user_signup (

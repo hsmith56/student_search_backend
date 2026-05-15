@@ -1,3 +1,4 @@
+from collections import Counter
 import itertools
 import json
 import logging
@@ -262,7 +263,7 @@ def insert_full_student(student):
         to_json(student.health_comments),
         bool_to_int(student.live_with_pets),
         student.local_coordinator,
-        student.tuition_placement
+        student.tuition_placement,
     )
 
     connection = get_connection(detect_types=True)
@@ -324,6 +325,64 @@ def get_all_full_students() -> list[FullStudent]:
     list_of_all_students = [row_to_student(row) for row in cursor.fetchall()]
     connection.close()
     return list_of_all_students
+
+
+AVAILABLE_TO_PLACE_STATUSES = {"allocated"}
+
+
+def _parse_interest_list(raw_interests: str | None) -> list[str]:
+    if raw_interests is None:
+        return []
+
+    try:
+        parsed = json.loads(raw_interests)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return [
+        item.strip() for item in parsed if isinstance(item, str) and item.strip() != ""
+    ]
+
+
+def _to_title_case_interest_label(label: str) -> str:
+    return label.title().replace("(S)", "(s)").replace("Us Football", "US Football")
+
+
+def get_available_student_interest_counts() -> dict[str, int]:
+    connection = get_connection(row_factory=True)
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+    SELECT selected_interests
+    FROM student_full_view
+    WHERE LOWER(placement_status) IN (?)
+    """,
+        tuple(AVAILABLE_TO_PLACE_STATUSES),
+    )
+    rows = cursor.fetchall()
+    connection.close()
+
+    counts: Counter[str] = Counter()
+    display_labels: dict[str, str] = {}
+    for row in rows:
+        student_interest_keys: set[str] = set()
+        for interest in _parse_interest_list(row["selected_interests"]):
+            interest_key = interest.lower()
+            student_interest_keys.add(interest_key)
+            display_labels.setdefault(
+                interest_key, _to_title_case_interest_label(interest)
+            )
+        counts.update(student_interest_keys)
+
+    return {
+        display_labels[interest_key]: count
+        for interest_key, count in sorted(
+            counts.items(), key=lambda item: display_labels[item[0]].casefold()
+        )
+    }
 
 
 def get_full_student_by_id(student_app_id) -> FullStudent | None:
