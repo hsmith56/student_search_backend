@@ -10,7 +10,7 @@ from repositories.base import get_connection
 
 logger = logging.getLogger(__name__)
 
-_VALID_ACCOUNT_TYPES = {"admin", "rpm", "lc"}
+_VALID_ACCOUNT_TYPES = {"admin", "director", "rpm", "lc"}
 _CODE_LETTERS = string.ascii_uppercase
 _CODE_DIGITS = string.digits
 
@@ -29,6 +29,7 @@ def _normalize_signup_code(signup_code: str) -> str:
 def _generate_signup_code(account_type: str) -> str:
     prefix_map = {
         "admin": "ADM",
+        "director": "DIR",
         "rpm": "RPM",
         "lc": "LC",
     }

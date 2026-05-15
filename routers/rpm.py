@@ -28,8 +28,8 @@ router: APIRouter = APIRouter(prefix="/rpm", tags=["rpm"])
 logger = logging.getLogger(__name__)
 
 
-def _require_rpm_or_admin(current_user: dict) -> None:
-    if current_user["account_type"] not in {"admin", "rpm"}:
+def _require_director_rpm_or_admin(current_user: dict) -> None:
+    if current_user["account_type"] not in {"admin", "director", "rpm"}:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
@@ -49,11 +49,11 @@ def _resolve_manager_id_for_create(
     payload: "SignupRequestCreate", current_user: dict
 ) -> str | None:
     creator_role = current_user["account_type"]
-    if creator_role == "rpm":
+    if creator_role in {"director", "rpm"}:
         if payload.account_type == "admin":
             raise HTTPException(
                 status_code=403,
-                detail="RPM users cannot create admin accounts",
+                detail="Director and RPM users cannot create admin accounts",
             )
         return current_user["id"]
 
@@ -71,10 +71,10 @@ def _resolve_manager_id_for_create(
     manager_user = read_user(user_id=requested_manager_id)
     if manager_user is None:
         raise HTTPException(status_code=400, detail="manager_id user not found")
-    if manager_user["account_type"] != "rpm":
+    if manager_user["account_type"] not in {"director", "rpm"}:
         raise HTTPException(
             status_code=400,
-            detail="manager_id must reference an rpm user",
+            detail="manager_id must reference a director or rpm user",
         )
 
     return requested_manager_id
@@ -96,7 +96,7 @@ class SignupRequestCreate(BaseModel):
     last_name: str = Field(min_length=1)
     email: str | None = None
     states: list[str]
-    account_type: Literal["admin", "lc", "rpm"]
+    account_type: Literal["admin", "director", "lc", "rpm"]
     manager_id: str | None = None
 
 
@@ -106,7 +106,7 @@ class SignupRequestItem(BaseModel):
     last_name: str | None = None
     email: str | None = None
     states: list[str]
-    account_type: Literal["admin", "lc", "rpm"]
+    account_type: Literal["admin", "director", "lc", "rpm"]
     is_registered: bool
     manager_id: str | None = None
     signup_code: str | None = None
@@ -126,7 +126,7 @@ class AdminGetUserItem(BaseModel):
     id: str
     username: str
     first_name: str
-    account_type: Literal["admin", "rpm", "lc"]
+    account_type: Literal["admin", "director", "rpm", "lc"]
     states: list[str]
     manager_id: str | None = None
     notes_text: str | None = None
@@ -135,7 +135,7 @@ class AdminGetUserItem(BaseModel):
 class AdminPatchRequest(BaseModel):
     states: list[str] | None = None
     manager_id: str | None = None
-    account_type: Literal["admin", "rpm", "lc"] | None = None
+    account_type: Literal["admin", "director", "rpm", "lc"] | None = None
     notes_text: str | None = None
 
 
@@ -162,7 +162,7 @@ def create_rpm_signup_request(
     payload: SignupRequestCreate,
     current_user: dict = Depends(get_current_user),
 ) -> SignupRequestCreated:
-    _require_rpm_or_admin(current_user=current_user)
+    _require_director_rpm_or_admin(current_user=current_user)
 
     normalized_email = _normalize_optional_text(payload.email)
     manager_id = _resolve_manager_id_for_create(
@@ -204,7 +204,7 @@ def resend_rpm_signup_invitation(
     user_id: str,
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, str]:
-    _require_rpm_or_admin(current_user=current_user)
+    _require_director_rpm_or_admin(current_user=current_user)
 
     signup_user = _get_signup_user_or_404(user_id=user_id, current_user=current_user)
 
@@ -241,7 +241,7 @@ def resend_rpm_signup_invitation(
 def get_rpm_signup_requests(
     current_user: dict = Depends(get_current_user),
 ) -> list[SignupRequestItem]:
-    _require_rpm_or_admin(current_user=current_user)
+    _require_director_rpm_or_admin(current_user=current_user)
     rows = list_signup_users_for_manager(
         requester_id=current_user["id"],
         requester_role=current_user["account_type"],
@@ -266,7 +266,7 @@ def update_rpm_signup_request(
     payload: SignupRequestUpdate,
     current_user: dict = Depends(get_current_user),
 ) -> SignupRequestItem:
-    _require_rpm_or_admin(current_user=current_user)
+    _require_director_rpm_or_admin(current_user=current_user)
 
     update_states = "states" in payload.model_fields_set
     update_notes = "notes_text" in payload.model_fields_set
@@ -365,9 +365,7 @@ def admin_patch(
     )
     if update_account_type:
         if payload.account_type is None:
-            raise HTTPException(
-                status_code=400, detail="account_type cannot be null"
-            )
+            raise HTTPException(status_code=400, detail="account_type cannot be null")
         try:
             account_type_updated = update_user_account_type_by_id(
                 user_id=user_id,
@@ -394,10 +392,10 @@ def admin_patch(
             manager_user = read_user(user_id=normalized_manager_id)
             if manager_user is None:
                 raise HTTPException(status_code=400, detail="manager_id user not found")
-            if manager_user["account_type"] != "rpm":
+            if manager_user["account_type"] not in {"director", "rpm"}:
                 raise HTTPException(
                     status_code=400,
-                    detail="manager_id must reference an rpm user",
+                    detail="manager_id must reference a director or rpm user",
                 )
 
         manager_updated = update_user_manager_id_by_id(

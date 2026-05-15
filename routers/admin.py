@@ -24,11 +24,11 @@ class AdminUserItem(BaseModel):
     id: str
     username: str
     first_name: str
-    account_type: Literal["admin", "rpm", "lc"]
+    account_type: Literal["admin", "director", "rpm", "lc"]
 
 
 class AdminUserAccountTypePatchRequest(BaseModel):
-    account_type: Literal["admin", "rpm", "lc"]
+    account_type: Literal["admin", "director", "rpm", "lc"]
 
 
 @router.get(path="/users", response_model=list[AdminUserItem])
@@ -75,4 +75,5 @@ def delete_user(user_id: str, current_user: dict = Depends(get_current_user)) ->
 def get_rpms(current_user: dict = Depends(get_current_user)) -> list[dict[str, str]]:
     _require_admin(current_user=current_user)
     rpm_users = list_users_by_account_type(account_type="rpm")
-    return [{item["id"]: item["name"]} for item in rpm_users]
+    director_users = list_users_by_account_type(account_type="director")
+    return [{item["id"]: item["name"]} for item in [*director_users, *rpm_users]]
