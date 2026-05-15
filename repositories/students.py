@@ -2,6 +2,7 @@ from collections import Counter
 import itertools
 import json
 import logging
+import re
 import sqlite3
 from typing import Any
 
@@ -329,6 +330,70 @@ def get_all_full_students() -> list[FullStudent]:
 
 AVAILABLE_TO_PLACE_STATUSES = {"allocated"}
 
+REGION_REQUEST_IDENTIFIERS = tuple(f"R{region_number}" for region_number in range(1, 9))
+_REGION_REQUEST_PATTERN = re.compile(
+    r"\b(?:R|REGION\s*)[-\s]?([1-8])\b", re.IGNORECASE
+)
+_UPPERCASE_STATE_ABBREVIATION_PATTERN = re.compile(
+    r"(?<![A-Za-z])([A-Z]{2})(?![A-Za-z])"
+)
+_USAHSID_REGION_REQUEST_PATTERN = re.compile(r"R[-\s]?([1-8])", re.IGNORECASE)
+
+_STATE_NAME_TO_ABBREVIATION = {
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
+    "california": "CA",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
+    "florida": "FL",
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
+    "wyoming": "WY",
+    "district of columbia": "DC",
+}
+_STATE_ABBREVIATIONS = set(_STATE_NAME_TO_ABBREVIATION.values())
+
 
 def _parse_interest_list(raw_interests: str | None) -> list[str]:
     if raw_interests is None:
@@ -350,13 +415,138 @@ def _parse_interest_list(raw_interests: str | None) -> list[str]:
 def _to_title_case_interest_label(label: str) -> str:
     return label.title().replace("(S)", "(s)").replace("Us Football", "US Football")
 
+def _normalize_request_identifier(value: str) -> str | None:
+    cleaned = value.strip()
+    if cleaned == "":
+        return None
 
-def get_available_student_interest_counts() -> dict[str, int]:
+    region_match = _REGION_REQUEST_PATTERN.fullmatch(cleaned)
+    if region_match is not None:
+        return f"R{region_match.group(1)}"
+
+    upper_value = cleaned.upper()
+    if upper_value in _STATE_ABBREVIATIONS:
+        return upper_value
+
+    return _STATE_NAME_TO_ABBREVIATION.get(cleaned.casefold())
+
+def _parse_json_list(raw_value: str | None) -> list[Any]:
+    if raw_value is None:
+        return []
+
+    try:
+        parsed = json.loads(raw_value)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    return parsed
+
+def _extract_request_identifiers_from_profile_text(profile_text: str) -> set[str]:
+    identifiers = {
+        f"R{match}" for match in _REGION_REQUEST_PATTERN.findall(profile_text)
+    }
+    identifiers.update(
+        abbreviation
+        for abbreviation in _UPPERCASE_STATE_ABBREVIATION_PATTERN.findall(profile_text)
+        if abbreviation in _STATE_ABBREVIATIONS
+    )
+    return identifiers
+
+def _extract_request_identifiers_from_usahsid(usahsid: str | None) -> set[str]:
+    if usahsid is None:
+        return set()
+
+    normalized_usahsid = usahsid.strip().upper()
+    if normalized_usahsid == "":
+        return set()
+
+    identifiers = {
+        f"R{match}"
+        for match in _USAHSID_REGION_REQUEST_PATTERN.findall(normalized_usahsid)
+    }
+    if "CC" in normalized_usahsid:
+        identifiers.add("CA")
+
+    return identifiers
+
+def _get_student_request_identifiers(row: sqlite3.Row) -> set[str]:
+    identifiers: set[str] = _extract_request_identifiers_from_usahsid(row["usahsid"])
+
+    for state_value in _parse_json_list(row["states"]):
+        if not isinstance(state_value, str):
+            continue
+        identifier = _normalize_request_identifier(state_value)
+        if identifier is not None:
+            identifiers.add(identifier)
+
+    profile_text = "\n".join(
+        str(row[field_name])
+        for field_name in (
+            "free_text_interests",
+            "family_description",
+            "favorite_subjects",
+            "photo_comments",
+            "allergy_comments",
+            "dietary_restrictions",
+            "intro_message",
+            "message_to_host_family",
+            "message_from_natural_family",
+            "health_comments",
+        )
+        if row[field_name] is not None
+    )
+    identifiers.update(_extract_request_identifiers_from_profile_text(profile_text))
+
+    return identifiers
+
+def _sorted_interest_counts(
+    counts: Counter[str], display_labels: dict[str, str]
+) -> dict[str, int]:
+    return {
+        display_labels[interest_key]: count
+        for interest_key, count in sorted(
+            counts.items(), key=lambda item: display_labels[item[0]].casefold()
+        )
+    }
+
+def _sorted_request_identifiers(identifiers: set[str]) -> list[str]:
+    regions = [
+        identifier
+        for identifier in REGION_REQUEST_IDENTIFIERS
+        if identifier in identifiers
+    ]
+    states = sorted(
+        (
+            identifier
+            for identifier in identifiers
+            if identifier not in REGION_REQUEST_IDENTIFIERS
+        ),
+        key=str.casefold,
+    )
+    return regions + states
+
+def get_available_student_interest_counts() -> dict[str, dict[str, int]]:
     connection = get_connection(row_factory=True)
     cursor = connection.cursor()
     cursor.execute(
         """
-    SELECT selected_interests
+    SELECT
+        selected_interests,
+        usahsid,
+        states,
+        free_text_interests,
+        family_description,
+        favorite_subjects,
+        photo_comments,
+        allergy_comments,
+        dietary_restrictions,
+        intro_message,
+        message_to_host_family,
+        message_from_natural_family,
+        health_comments
     FROM student_full_view
     WHERE LOWER(placement_status) IN (?)
     """,
@@ -365,7 +555,7 @@ def get_available_student_interest_counts() -> dict[str, int]:
     rows = cursor.fetchall()
     connection.close()
 
-    counts: Counter[str] = Counter()
+    counts_by_request: dict[str, Counter[str]] = {"no_requests": Counter()}
     display_labels: dict[str, str] = {}
     for row in rows:
         student_interest_keys: set[str] = set()
@@ -375,15 +565,30 @@ def get_available_student_interest_counts() -> dict[str, int]:
             display_labels.setdefault(
                 interest_key, _to_title_case_interest_label(interest)
             )
-        counts.update(student_interest_keys)
 
+        if len(student_interest_keys) == 0:
+            continue
+
+        request_identifiers = _get_student_request_identifiers(row)
+        if len(request_identifiers) == 0:
+            counts_by_request["no_requests"].update(student_interest_keys)
+            continue
+
+        for request_identifier in request_identifiers:
+            counts_by_request.setdefault(request_identifier, Counter()).update(
+                student_interest_keys
+            )
+
+    ordered_request_keys = ["no_requests"] + _sorted_request_identifiers(
+        set(counts_by_request) - {"no_requests"}
+    )
     return {
-        display_labels[interest_key]: count
-        for interest_key, count in sorted(
-            counts.items(), key=lambda item: display_labels[item[0]].casefold()
+        request_key: _sorted_interest_counts(
+            counts_by_request[request_key], display_labels
         )
+        for request_key in ordered_request_keys
+        if len(counts_by_request[request_key]) > 0 or request_key == "no_requests"
     }
-
 
 def get_full_student_by_id(student_app_id) -> FullStudent | None:
     connection = get_connection(row_factory=True)

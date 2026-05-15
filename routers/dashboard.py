@@ -11,9 +11,9 @@ def _require_director_or_admin(current_user: dict) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-@router.get(path="/interests", response_model=dict[str, int])
+@router.get(path="/interests", response_model=dict[str, dict[str, int]])
 def get_interest_analysis(
     current_user: dict = Depends(get_current_user),
-) -> dict[str, int]:
+) -> dict[str, dict[str, int]]:
     _require_director_or_admin(current_user=current_user)
     return get_available_student_interest_counts()
