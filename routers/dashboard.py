@@ -21,16 +21,11 @@ def get_interest_analysis(
 
 @router.get(path="/interest-rarity", response_model=dict)
 def get_interest_rarity_analysis(
-    top_matches_per_student: int = 5,
-    limit: int | None = 50,
-    include_similar_students: bool = False,
-    sort: str = "overall_rarity_score",
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     _require_director_or_admin(current_user=current_user)
     return get_allocated_student_interest_rarity(
-        top_matches_per_student=top_matches_per_student,
-        limit=limit,
-        include_similar_students=include_similar_students,
-        sort=sort,
+        limit=None,
+        include_similar_students=True,
+        sort=None,
     )
