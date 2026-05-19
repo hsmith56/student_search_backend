@@ -6,6 +6,7 @@ import hashlib
 import uuid
 from pydantic import BaseModel
 
+from core.config import settings
 from repositories.users import (
     complete_signup_registration,
     get_pending_user_by_signup_code,
@@ -22,6 +23,25 @@ REFRESH_TTL = 60 * 60 * 24 * 7  # 7 days
 refresh_tokens = {}
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def set_auth_cookie(response: Response, *, key: str, value: str, max_age: int) -> None:
+    response.set_cookie(
+        key=key,
+        value=value,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=max_age,
+    )
+
+
+def delete_auth_cookie(response: Response, *, key: str) -> None:
+    response.delete_cookie(
+        key=key,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+    )
 
 
 def hash_password(password: str) -> str:
@@ -140,12 +160,10 @@ def get_current_user(
         issue_new_session_on_refresh=True,
     )
     if new_session_id:
-        response.set_cookie(
+        set_auth_cookie(
+            response,
             key=SESSION_COOKIE_NAME,
             value=new_session_id,
-            httponly=True,
-            secure=True,
-            samesite="none",
             max_age=SESSION_TTL,
         )
     return user
@@ -172,23 +190,19 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
         username=user["username"], user_id=user["id"], first_name=user["first_name"]
     )
     # set session cookie
-    response.set_cookie(
+    set_auth_cookie(
+        response,
         key=SESSION_COOKIE_NAME,
         value=session_id,
-        httponly=True,
-        secure=True,
-        samesite="none",
         max_age=SESSION_TTL,
     )
 
     # create and set refresh token
     refresh: str = create_refresh_token(user_id=user["id"])
-    response.set_cookie(
+    set_auth_cookie(
+        response,
         key=REFRESH_COOKIE_NAME,
         value=refresh,
-        httponly=True,
-        secure=True,
-        samesite="none",
         max_age=REFRESH_TTL,
     )
     return {"message": "Logged in successfully"}
@@ -221,8 +235,8 @@ def logout(
         except KeyError:
             pass
 
-    response.delete_cookie(key=SESSION_COOKIE_NAME)
-    response.delete_cookie(key=REFRESH_COOKIE_NAME)
+    delete_auth_cookie(response, key=SESSION_COOKIE_NAME)
+    delete_auth_cookie(response, key=REFRESH_COOKIE_NAME)
     return {"message": "Logged out"}
 
 

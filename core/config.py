@@ -87,6 +87,14 @@ class Settings:
             raw_cors_origins=os.getenv("CORS_ORIGINS"),
             domain=self.domain,
         )
+        self.cookie_secure = _to_bool(
+            os.getenv("COOKIE_SECURE"), default=self.environment == "production"
+        )
+        self.cookie_samesite = os.getenv(
+            "COOKIE_SAMESITE", "none" if self.environment == "production" else "lax"
+        ).strip().lower()
+        if self.cookie_samesite not in {"lax", "strict", "none"}:
+            self.cookie_samesite = "none" if self.environment == "production" else "lax"
         self.beacon_base_url = os.getenv(
             "BEACON_BASE_URL", "https://api.ciee.org"
         ).rstrip("/")
