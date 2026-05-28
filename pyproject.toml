@@ -8,6 +8,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastapi[standard]>=0.118.0",
     "posthog>=6.9.3",
+    "pyinstaller>=6.20.0",
     "pytz>=2025.2",
     "rapidfuzz>=3.13.0",
     "requests>=2.32.5",
